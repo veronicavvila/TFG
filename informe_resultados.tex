@@ -480,7 +480,7 @@ $\alpha$ real & $\hat{\alpha}$ (media) & $\hat{\alpha}$ (std) \\
     \item \textbf{H3:} Las desviaciones estándar son mínimas (máximo 0.0016), demostrando que $\hat{\alpha}$ es repeatible entre semillas. Sin embargo, existe una \textbf{subestimación sistemática del orden del 23\%}: para $\alpha=0.05$ estima $0.0391$, para $\alpha=0.5$ estima $0.3868$. Aunque la reproducibilidad es excelente, este sesgo es consistente y debe tenerse en cuenta. Es un sesgo inherente del estimador debido a que el clasificador logístico con regularización L2 tiende a producir scores conservadores para la clase positiva en problemas desbalanceados. 
 \end{itemize}
 
-\subsubsection{Método robusto: positivos confiables (A)}
+\subsubsection{Método robusto: positivos confiables}
 
 Se evaluó una variante robusta del estimador de $\alpha$ usando solo los positivos etiquetados con scores más altos (top 20%). Al mantener solo los positivos ``más confiables'', se reduce el sesgo de subestimación: $\hat{\alpha}$ arrojó $0.5095$ para $\alpha=0.5$ (error de 2\%) frente a $0.3868$ con la media simple (error de 23\%). Sin embargo, en Magic Telescope los resultados de Spearman bajaron ligeramente a $0.877$ (vs $0.919$ con media), sugiriendo que donde ya la media funciona bien, agregar robustez introduce ruido innecesario. La técnica de positivos confiables es más efectiva en escenarios con subestimación severa de $\hat{\alpha}$, donde el sesgo compromete todo el pipeline PU.
 
