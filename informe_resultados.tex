@@ -532,6 +532,10 @@ $\alpha$ real & $\hat{\alpha}$ (media) & $\hat{\alpha}$ (std) \\
 
 Phoneme valida parcialmente el método propuesto. La mejora de PU sobre naive es evidente a $\alpha$ bajos, aunque la estabilidad general del ranking sugiere que el dataset tiene estructura suave. Es un caso intermedio donde PU proporciona ganancia práctica pero sin robustez sobresaliente.
 
+\subsubsection{Método robusto: positivos confiables}
+
+Con el método robusto de estimación de $\alpha$ (top 20\% de scores), Phoneme muestra mejora significativa: $\hat{\alpha}$ converge mucho mejor ($0.5224$ para $\alpha=0.5$, error de 4.5\% vs 21.6\% con media simple). La correlación Spearman PU se mantiene alta y estable ($0.812$--$0.968$) independientemente de $\alpha$, demostrando robustez del pipeline al etiquetado parcial. La validación cruzada reduce sustancialmente la varianza de los rankings entre folds, resultando en un sistema confiable para selección de features en datos acústicos.
+
 % ===================== RESUMEN =====================
 \section{Resumen general}
 

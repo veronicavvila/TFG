@@ -6,11 +6,11 @@ import matplotlib.pyplot as plt
 import mlflow
 from mlflow.tracking import MlflowClient
 from sklearn.datasets import fetch_openml
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import train_test_split, StratifiedKFold
 
 from src.data_utiles import generar_etiquetas_pu, añadir_ruido_gaussiano
 from src.config import *
-from src.pu_model import entrenar_clasificador_pu, estimar_alpha, obtener_scores, estimar_probabilidad_real
+from src.pu_model import entrenar_clasificador_pu, estimar_alpha, estimar_alpha_robusto, obtener_scores, estimar_probabilidad_real
 from src.mi_utiles import calcular_mi_ranking, guardar_ranking
 from src.evaluacion import comparar_metodos, calcular_mi_naive, calcular_mi_real, calcular_varianza, spearman_rankings
 
@@ -101,88 +101,131 @@ def main():
                     mlflow.log_metric("n_labeled_positive", int(sum(S)))
                     mlflow.log_metric("n_unlabeled", int(len(S) - sum(S)))
 
-                # Entrenar modelo PU
-                modelo = entrenar_clasificador_pu(X_noisy, S, random_state=seed)
-                if RUN_MODE == 'single':
-                    mlflow.sklearn.log_model(modelo, "pu_model")
-
-                # Estimar alpha (sobre todo X_noisy; el modelo PU usa S, no y)
-                scores = obtener_scores(modelo, X_noisy)
-                alpha_hat = estimar_alpha(scores, S)
-                if RUN_MODE == 'single':
-                    mlflow.log_metric("alpha_estimated", float(alpha_hat))
-
-                # Probabilidad real estimada sobre todo X_noisy; split train/test en un solo paso
-                # para garantizar alineación. Rankings se calcularán SOLO sobre train.
-                p_y = estimar_probabilidad_real(scores, alpha_hat)
-                X_train, X_test, y_train, y_test, S_train, S_test, p_y_train, _ = \
-                    train_test_split(X_noisy, y, S, p_y, test_size=0.3, random_state=seed, stratify=y)
-                mi_scores, ranking = calcular_mi_ranking(
-                    X_train, p_y_train, metodo="regresion", random_state=seed
-                )
-
-                mi_naive_scores, ranking_naive = calcular_mi_naive(X_train, S_train)
-                mi_real_scores,  ranking_real  = calcular_mi_real(X_train, y_train)
-                var_scores,      ranking_var   = calcular_varianza(X_train)
-
-                if RUN_MODE == 'single':
-                    guardar_ranking("PU_corregido", ranking,       feature_names, TOP_K, mi_scores)
-                    guardar_ranking("MI_naive",     ranking_naive, feature_names, TOP_K, mi_naive_scores)
-                    guardar_ranking("MI_real",      ranking_real,  feature_names, TOP_K, mi_real_scores)
-                    guardar_ranking("Varianza",     ranking_var,   feature_names, TOP_K, var_scores)
-
-                    # Comparar métodos: train para selección y entrenamiento, test para AUC
-                    resultados = comparar_metodos(
-                        X_train, X_test, y_train, y_test,
-                        ranking,
-                        ranking_naive, ranking_real, ranking_var, k=TOP_K
+                # Estimar p_y sobre TODO el dataset primero (necesario para split estratificado)
+                # pero rankings se calcularán SOLO sobre train
+                modelo_full = entrenar_clasificador_pu(X_noisy, S, random_state=seed)
+                scores_full = obtener_scores(modelo_full, X_noisy)
+                
+                # Seleccionar método de estimación de alpha
+                if ALPHA_ESTIMATION_METHOD == 'robust':
+                    alpha_hat_full = estimar_alpha_robusto(scores_full, S, top_q_percent=ALPHA_TOP_Q_PERCENT)
+                else:
+                    alpha_hat_full = estimar_alpha(scores_full, S)
+                
+                p_y_full = estimar_probabilidad_real(scores_full, alpha_hat_full)
+                
+                # Cross-validation 5-fold
+                skf = StratifiedKFold(n_splits=5, shuffle=True, random_state=seed)
+                fold_results = []
+                
+                for fold_idx, (train_idx, test_idx) in enumerate(skf.split(X_noisy, y)):
+                    # Crear splits por fold
+                    X_train_fold = X_noisy[train_idx]
+                    X_test_fold = X_noisy[test_idx]
+                    y_train_fold = y[train_idx]
+                    y_test_fold = y[test_idx]
+                    S_train_fold = S[train_idx]
+                    S_test_fold = S[test_idx]
+                    p_y_train_fold = p_y_full[train_idx]
+                    
+                    # Entrenar modelo PU SOLO en train fold
+                    modelo = entrenar_clasificador_pu(X_train_fold, S_train_fold, random_state=seed)
+                    
+                    if RUN_MODE == 'single' and fold_idx == 0:
+                        mlflow.sklearn.log_model(modelo, "pu_model")
+                    
+                    # Estimar alpha SOLO con train fold
+                    scores_train = obtener_scores(modelo, X_train_fold)
+                    
+                    if ALPHA_ESTIMATION_METHOD == 'robust':
+                        alpha_hat = estimar_alpha_robusto(scores_train, S_train_fold, top_q_percent=ALPHA_TOP_Q_PERCENT)
+                    else:
+                        alpha_hat = estimar_alpha(scores_train, S_train_fold)
+                    
+                    if RUN_MODE == 'single' and fold_idx == 0:
+                        mlflow.log_metric("alpha_estimated", float(alpha_hat))
+                    
+                    # Calcular rankings SOLO con train fold
+                    p_y_train = estimar_probabilidad_real(scores_train, alpha_hat)
+                    mi_scores, ranking = calcular_mi_ranking(
+                        X_train_fold, p_y_train, metodo="regresion", random_state=seed
                     )
-                    for metodo, auc in resultados.items():
-                        mlflow.log_metric(f"AUC_{metodo}", float(auc))
-
-                    print("\nResultados AUC (Top", TOP_K, "features):")
-                    for metodo, auc in resultados.items():
-                        print(f"  {metodo}: {auc:.4f}")
-
-                else:  # sweep: acumular métricas de overlap y AUC
-                    overlap_naive = _topk_overlap(ranking_naive, ranking_real, TOP_K)
-                    overlap_pu    = _topk_overlap(ranking, ranking_real, TOP_K)
-
-                    spearman_naive = spearman_rankings(ranking_naive, ranking_real)
-                    spearman_pu    = spearman_rankings(ranking,       ranking_real)
-                    spearman_var   = spearman_rankings(ranking_var,   ranking_real)
-                    spearman_real  = 1.0  # MI_real comparado consigo mismo, siempre 1
-
-                    # Acumular rankings completos para medir estabilidad entre semillas
-                    if alpha not in rankings_by_alpha:
-                        rankings_by_alpha[alpha] = {'pu': [], 'naive': [], 'real': [], 'var': []}
-                    rankings_by_alpha[alpha]['pu'].append(ranking)
-                    rankings_by_alpha[alpha]['naive'].append(ranking_naive)
-                    rankings_by_alpha[alpha]['real'].append(ranking_real)
-                    rankings_by_alpha[alpha]['var'].append(ranking_var)
-
-                    # Comparar métodos: train para selección y entrenamiento, test para AUC
+                    
+                    mi_naive_scores, ranking_naive = calcular_mi_naive(X_train_fold, S_train_fold)
+                    mi_real_scores,  ranking_real  = calcular_mi_real(X_train_fold, y_train_fold)
+                    var_scores,      ranking_var   = calcular_varianza(X_train_fold)
+                    
+                    if RUN_MODE == 'single' and fold_idx == 0:
+                        guardar_ranking("PU_corregido", ranking,       feature_names, TOP_K, mi_scores)
+                        guardar_ranking("MI_naive",     ranking_naive, feature_names, TOP_K, mi_naive_scores)
+                        guardar_ranking("MI_real",      ranking_real,  feature_names, TOP_K, mi_real_scores)
+                        guardar_ranking("Varianza",     ranking_var,   feature_names, TOP_K, var_scores)
+                    
+                    # Evaluar AUC en test fold
                     aucs = comparar_metodos(
-                        X_train, X_test, y_train, y_test,
+                        X_train_fold, X_test_fold, y_train_fold, y_test_fold,
                         ranking,
                         ranking_naive, ranking_real, ranking_var, k=TOP_K
                     )
+                    
+                    if RUN_MODE == 'single' and fold_idx == 0:
+                        print("\nResultados AUC (Top", TOP_K, "features):")
+                        for metodo, auc in aucs.items():
+                            print(f"  {metodo}: {auc:.4f}")
+                            mlflow.log_metric(f"AUC_{metodo}", float(auc))
+                    
+                    if RUN_MODE == 'sweep':
+                        # Calcular métricas para este fold
+                        overlap_naive = _topk_overlap(ranking_naive, ranking_real, TOP_K)
+                        overlap_pu    = _topk_overlap(ranking, ranking_real, TOP_K)
 
-                    rows.append({
+                        spearman_naive = spearman_rankings(ranking_naive, ranking_real)
+                        spearman_pu    = spearman_rankings(ranking,       ranking_real)
+                        spearman_var   = spearman_rankings(ranking_var,   ranking_real)
+                        spearman_real  = 1.0
+                        
+                        fold_results.append({
+                            "fold": fold_idx,
+                            "alpha_hat":          float(alpha_hat),
+                            "overlap_naive":      int(overlap_naive),
+                            "overlap_pu":         float(overlap_pu),
+                            "spearman_naive":     float(spearman_naive),
+                            "spearman_pu":        float(spearman_pu),
+                            "spearman_var":       float(spearman_var),
+                            "spearman_real":      float(spearman_real),
+                            "auc_PU_corregido":   float(aucs["PU_corregido"]),
+                            "auc_MI_naive":       float(aucs["MI_naive"]),
+                            "auc_MI_real":        float(aucs["MI_real"]),
+                            "auc_Varianza":       float(aucs["Varianza"]),
+                        })
+                        
+                        # Acumular rankings para estabilidad
+                        if alpha not in rankings_by_alpha:
+                            rankings_by_alpha[alpha] = {'pu': [], 'naive': [], 'real': [], 'var': []}
+                        rankings_by_alpha[alpha]['pu'].append(ranking)
+                        rankings_by_alpha[alpha]['naive'].append(ranking_naive)
+                        rankings_by_alpha[alpha]['real'].append(ranking_real)
+                        rankings_by_alpha[alpha]['var'].append(ranking_var)
+                
+                # Agregar promedio de folds a resultados
+                if RUN_MODE == 'sweep' and fold_results:
+                    fold_df = pd.DataFrame(fold_results)
+                    avg_row = {
                         "alpha_true":         alpha,
                         "seed":               seed,
-                        "alpha_hat":          float(alpha_hat),
-                        "overlap_naive":      int(overlap_naive),
-                        "overlap_pu":         float(overlap_pu),
-                        "spearman_naive":     float(spearman_naive),
-                        "spearman_pu":        float(spearman_pu),
-                        "spearman_var":       float(spearman_var),
-                        "spearman_real":      float(spearman_real),
-                        "auc_PU_corregido":   float(aucs["PU_corregido"]),
-                        "auc_MI_naive":       float(aucs["MI_naive"]),
-                        "auc_MI_real":        float(aucs["MI_real"]),
-                        "auc_Varianza":       float(aucs["Varianza"]),
-                    })
+                        "alpha_hat":          float(fold_df["alpha_hat"].mean()),
+                        "overlap_naive":      int(fold_df["overlap_naive"].mean()),
+                        "overlap_pu":         float(fold_df["overlap_pu"].mean()),
+                        "spearman_naive":     float(fold_df["spearman_naive"].mean()),
+                        "spearman_pu":        float(fold_df["spearman_pu"].mean()),
+                        "spearman_var":       float(fold_df["spearman_var"].mean()),
+                        "spearman_real":      float(fold_df["spearman_real"].mean()),
+                        "auc_PU_corregido":   float(fold_df["auc_PU_corregido"].mean()),
+                        "auc_MI_naive":       float(fold_df["auc_MI_naive"].mean()),
+                        "auc_MI_real":        float(fold_df["auc_MI_real"].mean()),
+                        "auc_Varianza":       float(fold_df["auc_Varianza"].mean()),
+                    }
+                    rows.append(avg_row)
 
         # Logging específico del modo sweep 
         if RUN_MODE == 'sweep':
