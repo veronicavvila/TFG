@@ -92,6 +92,48 @@ def estimar_alpha(scores, S):
     return alpha_hat
 
 
+def estimar_alpha_robusto(scores, S, top_q_percent=20):
+    """
+    Estima alpha usando solo los positivos etiquetados con scores más altos
+    (positivos "más confiables"). Robusto contra subestimación.
+    
+    Parámetros
+    ----------
+    scores : array-like
+        Probabilidades estimadas P(S=1 | x).
+    S : array-like
+        Etiquetas PU (1 = positivo etiquetado, 0 = unlabeled).
+    top_q_percent : float
+        Percentil (0-100) de scores más altos a usar. Default 20%.
+        Ej: 20 = usar top 20% de los positivos etiquetados.
+    
+    Devuelve
+    -------
+    alpha_hat : float
+        Estimación robusta de alpha (tipicamente más alta que la media).
+    """
+    scores = np.asarray(scores)
+    S = np.asarray(S)
+    
+    # Seleccionar positivos etiquetados
+    scores_positivos = scores[S == 1]
+    
+    if len(scores_positivos) == 0:
+        return 0.0
+    
+    # Threshold es el percentil (100 - top_q_percent)
+    # ej: si top_q_percent=20, queremos scores >= percentil 80
+    threshold = np.percentile(scores_positivos, 100 - top_q_percent)
+    
+    # Seleccionar solo los scores por encima del threshold
+    scores_confiables = scores_positivos[scores_positivos >= threshold]
+    
+    # Estimar alpha con los positivos confiables
+    alpha_hat = np.mean(scores_confiables)
+    
+    return alpha_hat
+
+
 def estimar_probabilidad_real(scores, alpha_hat):
     """
     Estima P(Y=1 | x) a partir de P(S=1 | x)
