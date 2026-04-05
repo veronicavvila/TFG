@@ -14,5 +14,14 @@ NOISE_LEVEL = 0
 # Parámetros generales
 TOP_K = 10
 EXPERIMENT_NAME = "miniboone"
-RUN_NAME = "v1.0.0"
+RUN_NAME = "v2.0.0"
+
+# Método de estimación de alpha
+# 'mean': media simple de scores en S=1 (método estándar)
+# 'robust': usar top Q% de scores más altos en S=1 (positivos confiables A)
+ALPHA_ESTIMATION_METHOD = 'robust'  # cambiar a 'mean' para usar método estándar
+
+# Si ALPHA_ESTIMATION_METHOD == 'robust', qué percentil usar (0-100)
+# 10 = usar top 10% más alto, 20 = top 20%, etc.
+ALPHA_TOP_Q_PERCENT = 20
  
