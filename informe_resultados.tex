@@ -357,16 +357,16 @@ Dado el enorme número de muestras, el dataset ya tiene suficiente variabilidad 
 
 \begin{table}[H]
 \centering
-\caption{Estimación de $\hat{\alpha}$ -- MiniBooNE}
-\begin{tabular}{ccc}
+\caption{Estimación de $\hat{\alpha}$ -- MiniBooNE (comparación: media vs robusto)}
+\begin{tabular}{ccccc}
 \toprule
-$\alpha$ real & $\hat{\alpha}$ (media) & $\hat{\alpha}$ (std) \\
+$\alpha$ real & $\hat{\alpha}$ (media) & Error (media) & $\hat{\alpha}$ (robusto) & Error (robusto) \\
 \midrule
-0.05 & 0.029 & 0.001 \\
-0.10 & 0.059 & 0.001 \\
-0.20 & 0.123 & 0.001 \\
-0.30 & 0.188 & 0.001 \\
-0.50 & 0.319 & 0.001 \\
+0.05 & 0.029 & 42\% & 0.061 & 22\% \\
+0.10 & 0.059 & 41\% & 0.122 & 22\% \\
+0.20 & 0.123 & 38\% & 0.240 & 20\% \\
+0.30 & 0.188 & 37\% & 0.358 & 19\% \\
+0.50 & 0.319 & 36\% & 0.581 & 16\% \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -375,8 +375,16 @@ $\alpha$ real & $\hat{\alpha}$ (media) & $\hat{\alpha}$ (std) \\
 
 \begin{figure}[H]
 \centering
-\includegraphics[width=0.65\textwidth]{resultados/miniboone_spearman_vs_alpha.png}
-\caption{MiniBooNE: correlación de Spearman con el ranking real vs $\alpha$ verdadero.}
+\begin{subfigure}{0.48\textwidth}
+    \includegraphics[width=\linewidth]{resultados/miniboone_spearman_vs_alpha.png}
+    \caption{Método simple (media)}
+\end{subfigure}
+\hfill
+\begin{subfigure}{0.48\textwidth}
+    \includegraphics[width=\linewidth]{resultados/miniboone_spearman_positivos.png}
+    \caption{Método robusto (positivos confiables)}
+\end{subfigure}
+\caption{MiniBooNE: correlación de Spearman con el ranking real vs $\alpha$ verdadero (comparación de métodos).}
 \end{figure}
 
 \subsection{Análisis}
