@@ -14,9 +14,9 @@ NOISE_LEVEL = 0
 # Parámetros generales
 TOP_K = 10
 EXPERIMENT_NAME = "phoneme"
-RUN_NAME = "v1.0.0"
+RUN_NAME = "v2.1.0positivos"
 
 # Método de estimación de alpha
-ALPHA_ESTIMATION_METHOD = 'robust'  # 'mean' o 'robust'
+ALPHA_ESTIMATION_METHOD = 'mean'  # 'mean' o 'robust'
 ALPHA_TOP_Q_PERCENT = 20  # percentil superior a considerar en método robusto
  
