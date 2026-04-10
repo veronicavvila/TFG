@@ -1,6 +1,18 @@
 RANDOM_STATE = 42
 RUN_MODE = 'sweep'  # 'single' o 'sweep'
 
+# Dataset a utilizar (cambia esto para ejecutar otro dataset desde la misma rama)
+# Opciones soportadas: magic_telescope, ionosphere, spambase, sonar, miniboone,
+# phoneme, breast_cancer, gas_sensor_drift
+DATASET = "breast_cancer"
+
+# Opcional: fuerza la etiqueta considerada como positiva en datasets OpenML
+# (si es None, se usa el valor por defecto del registry en src/datasets.py)
+DATASET_POSITIVE_LABEL = None
+
+# Solo para gas_sensor_drift (dataset multiclase original): clase (gas) considerada positiva (one-vs-rest)
+GAS_POSITIVE_CLASS = 1
+
 # Parámetros modo single
 ALPHA_TRUE = 0.2
 
@@ -13,13 +25,10 @@ NOISE_LEVEL = 0
 
 # Parámetros generales
 TOP_K = 10
-EXPERIMENT_NAME = "magic_telescope"
-RUN_NAME = "v3.0.0"
-# Método de estimación de alpha
-# 'mean': media simple de scores en S=1 (método estándar)
-# 'robust': usar top Q% de scores más altos en S=1 (positivos confiables A)
-ALPHA_ESTIMATION_METHOD = 'robust'  # cambiar a 'robust' para usar positivos confiables
+EXPERIMENT_NAME = DATASET
+RUN_NAME = "Pruebav2.1.0positivos"
 
-# Si ALPHA_ESTIMATION_METHOD == 'robust', qué percentil usar (0-100)
-# 10 = usar top 10% más alto, 20 = top 20%, etc.
-ALPHA_TOP_Q_PERCENT = 20 
+# Método de estimación de alpha
+ALPHA_ESTIMATION_METHOD = 'robust'  # 'mean' o 'robust'
+ALPHA_TOP_Q_PERCENT = 20  # percentil superior a considerar en método robusto
+ 

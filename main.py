@@ -5,11 +5,11 @@ matplotlib.use('Agg')  # backend sin ventana
 import matplotlib.pyplot as plt
 import mlflow
 from mlflow.tracking import MlflowClient
-from sklearn.datasets import fetch_openml
 from sklearn.model_selection import train_test_split, StratifiedKFold
 
 from src.data_utiles import generar_etiquetas_pu, añadir_ruido_gaussiano
 from src.config import *
+from src.datasets import load_dataset_from_config
 from src.pu_model import entrenar_clasificador_pu, estimar_alpha, estimar_alpha_robusto, obtener_scores, estimar_probabilidad_real
 from src.mi_utiles import calcular_mi_ranking, guardar_ranking
 from src.evaluacion import comparar_metodos, calcular_mi_naive, calcular_mi_real, calcular_varianza, spearman_rankings
@@ -31,13 +31,7 @@ def _ranking_instability(rankings_list):
 
 def main():
     """Ejecuta experimento según el modo configurado (single o sweep)."""
-    # MAGIC Gamma Telescope Dataset (UCI via OpenML)
-    # 19 020 muestras, 10 features, binario: gamma (1) / hadron (0)
-    # Escenario PU natural: clasificación de eventos Cherenkov
-    _dataset = fetch_openml(name="MagicTelescope", version=1, as_frame=False)
-    X = _dataset.data
-    y = (_dataset.target == 'g').astype(int)
-    feature_names = np.array(_dataset.feature_names)
+    X, y, feature_names, ds_meta = load_dataset_from_config()
 
     # En modo single se itera una sola vez; en sweep se recorre la rejilla completa
     alphas = SWEEP_ALPHAS if RUN_MODE == 'sweep' else [ALPHA_TRUE]
@@ -58,8 +52,9 @@ def main():
         n_negatives = int((y == 0).sum())
         class_balance = round(n_positives / n_samples, 4) # proporción de positivos (que tan minoritaria es la clase positiva)
 
-        mlflow.log_param("dataset",       "magic_telescope")
-        mlflow.log_param("positive_class", "gamma ray (g)")
+        mlflow.log_param("dataset",        ds_meta.get("dataset_id", DATASET))
+        mlflow.log_param("dataset_kind",   ds_meta.get("kind", ""))
+        mlflow.log_param("positive_label", str(ds_meta.get("positive_label", "")))
         mlflow.log_param("n_samples",      n_samples)
         mlflow.log_param("n_features",         n_features)
         mlflow.log_param("n_positives",        n_positives)

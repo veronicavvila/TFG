@@ -1,9 +1,9 @@
 import pandas as pd
 import numpy as np
 import mlflow
-from sklearn.datasets import load_breast_cancer
 
 from src.data_utiles import generar_etiquetas_pu
+from src.datasets import load_dataset_from_config
 from src.pu_model import entrenar_clasificador_pu, obtener_scores, estimar_alpha, estimar_probabilidad_real
 from src.evaluacion import calcular_mi_naive
 from src.mi_utiles import calcular_mi_ranking
@@ -23,7 +23,7 @@ def run_sweep(alphas=None, seeds=None):
     if seeds is None:
         seeds = SWEEP_SEEDS
         
-    X, y = load_breast_cancer(return_X_y=True)
+    X, y, _, _ = load_dataset_from_config()
     rows = []
 
     for alpha in alphas:
