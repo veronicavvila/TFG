@@ -2,9 +2,12 @@ RANDOM_STATE = 42
 RUN_MODE = 'sweep'  # 'single' o 'sweep'
 
 # Dataset a utilizar (cambia esto para ejecutar otro dataset desde la misma rama)
-# Opciones soportadas: magic_telescope, ionosphere, spambase, sonar, miniboone,
-# phoneme, breast_cancer, gas_sensor_drift
-DATASET = "breast_cancer"
+# Opciones soportadas:
+#   - OpenML: magic_telescope, ionosphere, spambase, sonar, miniboone, phoneme
+#   - Sklearn: breast_cancer
+#   - Libsvm: gas_sensor_drift
+#   - Microarray: colon_cancer, prostate_cancer, lung_cancer (requiere download primero)
+DATASET = "colon_cancer"
 
 # Opcional: fuerza la etiqueta considerada como positiva en datasets OpenML
 # (si es None, se usa el valor por defecto del registry en src/datasets.py)
@@ -26,9 +29,9 @@ NOISE_LEVEL = 0
 # Parámetros generales
 TOP_K = 10
 EXPERIMENT_NAME = DATASET
-RUN_NAME = "Pruebav2.1.0positivos"
+RUN_NAME = "v1.0.0mean"
 
 # Método de estimación de alpha
-ALPHA_ESTIMATION_METHOD = 'robust'  # 'mean' o 'robust'
+ALPHA_ESTIMATION_METHOD = 'mean'  # 'mean' o 'robust'
 ALPHA_TOP_Q_PERCENT = 20  # percentil superior a considerar en método robusto
  

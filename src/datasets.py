@@ -71,11 +71,106 @@ _DATASETS: Dict[str, DatasetSpec] = {
         positive_label=1,
         description="Gas Sensor Array Drift (one gas vs rest, configurable)",
     ),
+    # Microarray datasets (Affymetrix expression data, GEO)
+    "colon_cancer": DatasetSpec(
+        kind="microarray",
+        openml_name="colon_cancer",  # filename para .npz
+        positive_label=1,
+        description="Colon Cancer (Alon et al. 2000) - 62 samples, ~2000 genes (Tumor vs Normal)",
+    ),
+    "prostate_cancer": DatasetSpec(
+        kind="microarray",
+        openml_name="prostate_cancer",
+        positive_label=1,
+        description="Prostate Cancer (Singh et al. 2002) - 102 samples, ~6000 genes (Tumor vs Normal)",
+    ),
+    "lung_cancer": DatasetSpec(
+        kind="microarray",
+        openml_name="lung_cancer",
+        positive_label=1,
+        description="Lung Cancer (Bhattacharjee et al. 2001) - ~181 samples, ~12000 genes (Adenocarcinoma vs Others)",
+    ),
 }
 
 
 def available_datasets() -> Tuple[str, ...]:
     return tuple(sorted(_DATASETS.keys()))
+
+
+def _download_microarray_dataset(dataset_name: str, dataset_key: str, cache_dir: str) -> None:
+    """Descarga automáticamente un dataset de microarray desde GEO Database."""
+    try:
+        import GEOparse
+    except ImportError:
+        raise ImportError(
+            f"GEOparse no instalado. Para usar datasets microarray:\n"
+            f"  pip install GEOparse\n"
+            f"Luego intenta de nuevo."
+        )
+    
+    geo_map = {
+        "colon_cancer": ("GSE5847", "Colon Cancer"),
+        "prostate_cancer": ("GSE3039", "Prostate Cancer"),
+        "lung_cancer": ("GSE7670", "Lung Cancer"),
+    }
+    
+    if dataset_key not in geo_map:
+        raise ValueError(f"No GEO mapping for {dataset_key}")
+    
+    geo_id, display_name = geo_map[dataset_key]
+    print(f"Descargando {display_name} desde GEO ({geo_id})...")
+    
+    try:
+        gse = GEOparse.get_GEO(geo=geo_id, destdir=cache_dir, silent=False)
+    except Exception as e:
+        raise RuntimeError(f"Error descargando de GEO: {e}")
+    
+    X_list = []
+    y_list = []
+    feature_names = None
+    
+    for gsm_name, gsm in gse.gsms.items():
+        try:
+            values = gsm.table['VALUE'].values
+            X_list.append(values)
+            
+            # Guardar nombres de features del primer sample
+            if feature_names is None:
+                feature_names = gsm.table.index.values
+            
+            # Extraer label del título
+            title = gsm.metadata.get('title', [''])[0].lower()
+            
+            if dataset_key == "colon_cancer":
+                y_list.append(1 if 'tumor' in title else 0)
+            elif dataset_key == "prostate_cancer":
+                y_list.append(1 if 'tumor' in title else 0)
+            elif dataset_key == "lung_cancer":
+                y_list.append(1 if 'adeno' in title else 0)
+        except Exception as e:
+            print(f"  Skipping sample {gsm_name}: {e}")
+            continue
+    
+    if not X_list:
+        raise RuntimeError(f"No samples extracted from {display_name}")
+    
+    X = np.array(X_list, dtype=np.float32)  # Shape: (n_samples, n_features)
+    y = np.array(y_list, dtype=int)
+    
+    # Si no tenemos feature names, generarlas
+    if feature_names is None or len(feature_names) == 0:
+        feature_names = np.array([f"gene_{i}" for i in range(X.shape[1])])
+    
+    # Normalizar si es necesario
+    if np.max(X) > 100:
+        X = np.log2(X + 1)
+    
+    # Guardar
+    import os
+    npz_file = os.path.join(cache_dir, f"{dataset_key}.npz")
+    np.savez(npz_file, X=X, y=y, feature_names=feature_names)
+    print(f"✓ {display_name} guardado: {X.shape}")
+
 
 
 def _binarize_labels(y_raw: np.ndarray, *, positive_label: Any) -> np.ndarray:
@@ -183,6 +278,39 @@ def load_dataset(
             "description": spec.description,
             "positive_label": positive_gas,
             "gas_positive_class": positive_gas,
+        }
+        return X, y, feature_names, meta
+
+    if spec.kind == "microarray":
+        import os
+        
+        # Load from .npz file (previously downloaded from GEO)
+        cache_dir = os.path.join("data", "microarray_datasets")
+        os.makedirs(cache_dir, exist_ok=True)
+        npz_file = os.path.join(cache_dir, f"{spec.openml_name}.npz")
+        
+        # Si no existe, intentar descargar automáticamente
+        if not os.path.exists(npz_file):
+            print(f"Descargando {dataset} desde GEO Database...")
+            _download_microarray_dataset(dataset, spec.openml_name, cache_dir)
+        
+        data = np.load(npz_file, allow_pickle=True)
+        X = np.asarray(data['X'], dtype=np.float32)
+        y_raw = np.asarray(data['y'], dtype=int)
+        
+        # Binarize if needed
+        y = _binarize_labels(y_raw, positive_label=positive_label)
+        
+        # Feature names stored in .npz
+        feature_names = np.asarray(data['feature_names'])
+        if feature_names.dtype == object:
+            feature_names = feature_names.astype(str)
+        
+        meta = {
+            "dataset_id": dataset,
+            "kind": spec.kind,
+            "description": spec.description,
+            "positive_label": positive_label,
         }
         return X, y, feature_names, meta
 
