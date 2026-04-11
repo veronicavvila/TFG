@@ -275,7 +275,15 @@ def _sweep_alpha(X, y, feature_names, estimation_method):
 
 
 def _sweep_percent(X, y, feature_names, estimation_method):
-    """Sweep variando top_q_percent con método 'robust' (varía el percentil usado para estimar alpha)."""
+    """Sweep variando top_q_percent con método 'robust' (varía el percentil usado para estimar alpha).
+    
+    FLUJO CORRECTO:
+    - alpha_hat varía según top_q_percent
+    - p_y se estima a partir de alpha_hat
+    - ranking_pu se calcula a partir de p_y (no del oráculo)
+    - features seleccionado varían según ranking_pu
+    - AUC y Spearman se calculan sobre features variables
+    """
     print(f"\n{'='*70}")
     print("EJECUTANDO SWEEP DE TOP_Q_PERCENT")
     print(f"{'='*70}")
@@ -298,21 +306,33 @@ def _sweep_percent(X, y, feature_names, estimation_method):
             modelo = entrenar_clasificador_pu(X_train, S_train, random_state=seed)
             scores_train = obtener_scores(modelo, X_train)
             
-            # En _sweep_percent se varía el percentil con 'robust'
+            # Estimar alpha con percentil variable
             alpha_hat = estimar_alpha_robusto(scores_train, S_train, top_q_percent=top_q_percent)
             
+            # Estimar p_y con alpha estimado
             p_y = estimar_probabilidad_real(scores_train, alpha_hat)
-            _, ranking_real = calcular_mi_real(X_train, y_train)
-            top_k_features = ranking_real[:TOP_K]
+            
+            # Calcular ranking PU CORREGIDO (no oráculo) basado en p_y estimada
+            mi_scores_pu, ranking_pu = calcular_mi_ranking(
+                X_train, p_y, metodo="regresion", random_state=seed
+            )
+            
+            # Calcular ranking oráculo para comparación
+            mi_scores_real, ranking_real = calcular_mi_real(X_train, y_train)
+            
+            # Seleccionar features TOP_K usando ranking PU corregido (variable)
+            top_k_features = ranking_pu[:TOP_K]
             
             X_test_selected = X_test[:, top_k_features]
             X_train_selected = X_train[:, top_k_features]
             
+            # Evaluar AUC con features variables
             lr = LogisticRegression(random_state=seed, max_iter=1000)
             lr.fit(X_train_selected, y_train)
             auc = roc_auc_score(y_test, lr.predict_proba(X_test_selected)[:, 1])
             
-            spearman_corr, _ = spearmanr(p_y, y_train)
+            # Calcular Spearman entre ranking PU y ranking real
+            spearman_corr, _ = spearmanr(ranking_pu, ranking_real)
             
             rows.append({
                 "top_q_percent": top_q_percent,
@@ -363,7 +383,7 @@ def _sweep_percent(X, y, feature_names, estimation_method):
     ax.legend()
     ax.set_xticks(top_q_percents)
     
-    # Gráfico 2: AUC vs Top Q Percent
+    # Gráfico 2: AUC vs Top Q Percent (AHORA VARÍA porque features varían)
     ax = axes[0, 1]
     ax.plot(x, summary['auc_mean'].values, marker='s', linewidth=2, markersize=8, color='green')
     ax.fill_between(x,
@@ -371,12 +391,12 @@ def _sweep_percent(X, y, feature_names, estimation_method):
                     summary['auc_mean'].values + summary['auc_std'].values,
                     alpha=0.2, color='green')
     ax.set_xlabel('Top Q Percent (%)', fontsize=11)
-    ax.set_ylabel(f'AUC (top-{TOP_K} features)', fontsize=11)
-    ax.set_title('AUC vs Top Q Percent', fontsize=12, fontweight='bold')
+    ax.set_ylabel(f'AUC (top-{TOP_K} features PU_corregido)', fontsize=11)
+    ax.set_title('AUC vs Top Q Percent (features variables)', fontsize=12, fontweight='bold')
     ax.grid(True, alpha=0.3)
     ax.set_xticks(top_q_percents)
     
-    # Gráfico 3: Spearman vs Top Q Percent
+    # Gráfico 3: Spearman vs Top Q Percent (Correlación ranking PU vs Real)
     ax = axes[1, 0]
     ax.plot(x, summary['spearman_mean'].values, marker='^', linewidth=2, markersize=8, color='purple')
     ax.fill_between(x,
@@ -384,8 +404,8 @@ def _sweep_percent(X, y, feature_names, estimation_method):
                     summary['spearman_mean'].values + summary['spearman_std'].values,
                     alpha=0.2, color='purple')
     ax.set_xlabel('Top Q Percent (%)', fontsize=11)
-    ax.set_ylabel('Spearman Correlation', fontsize=11)
-    ax.set_title('Spearman Correlation vs Top Q Percent', fontsize=12, fontweight='bold')
+    ax.set_ylabel('Spearman (ranking PU vs Real)', fontsize=11)
+    ax.set_title('Correlación vs Top Q Percent (rankings variables)', fontsize=12, fontweight='bold')
     ax.grid(True, alpha=0.3)
     ax.set_xticks(top_q_percents)
     

@@ -31,7 +31,7 @@ ALPHA_ESTIMATION_METHOD = 'robust'  # 'mean' o 'robust'
 ALPHA_TOP_Q_PERCENT = 20  # percentil superior a considerar en método robusto
  
 # Parámetros modo sweep percent 
-TOP_Q_PERCENT_VALUES = [10, 20, 30, 40, 50]  # Porcentajes a evaluar (usado en modo 'sweep')
+TOP_Q_PERCENT_VALUES = [5, 10, 20, 50, 100]  # Porcentajes a evaluar (usado en modo 'sweep')
 
 # Ruido gaussiano en features (0 = sin ruido; p.ej. 0.3 = 30% de la std por feature)
 NOISE_LEVEL = 0
