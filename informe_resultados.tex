@@ -208,16 +208,46 @@ El fallo lo causa el ratio muestras/features. Con tan poca información, todo el
 
 \subsubsection{Método robusto: positivos confiables}
 
-Se evaluó la estimación robusta de $\alpha$ (top 20\%) en Sonar. Los resultados muestran que el método robusto \textbf{empeora drasticamente} la estimación de $\hat{\alpha}$ en casi todo el rango:
+Se evaluó la estimación robusta de $\alpha$ en Sonar variando el percentil desde 5\% hasta 100\% (con $\alpha_{\text{true}}=0.2$). Los resultados muestran un patrón \textbf{catastrófico}: la sobreestimación es extrema en todo el rango y no mejora significativamente incluso con top 100\%.
 
+\paragraph{Estimación de $\alpha$:} El método robusto produce errores devastadores:
 \begin{itemize}
-    \item Para $\alpha = 0.05$: $\hat{\alpha}_{\text{media}} = 0.528$ (error 956\%) vs $\hat{\alpha}_{\text{robusto}} = 0.751$ (error 1403\%) — empeora 447 puntos porcentuales, un deterioro catastrófico
-    \item Para $\alpha = 0.10$: $\hat{\alpha}_{\text{media}} = 0.442$ (error 342\%) vs $\hat{\alpha}_{\text{robusto}} = 0.716$ (error 616\%) — empeora 274 puntos porcentuales
-    \item Para $\alpha = 0.50$: $\hat{\alpha}_{\text{media}} = 0.554$ (error 11\%) vs $\hat{\alpha}_{\text{robusto}} = 0.874$ (error 75\%) — empeora 64 puntos porcentuales
-    \item Ambos métodos fallan completamente para este dataset
+    \item Top 5\%: $\hat{\alpha} \approx 0.92$ (error $\approx 360\%$) — sobrestimación extrema
+    \item Top 10\%: $\hat{\alpha} \approx 0.89$ (error $\approx 345\%$)
+    \item Top 20\%: $\hat{\alpha} \approx 0.83$ (error $\approx 300\%$)
+    \item Top 50\%: $\hat{\alpha} \approx 0.71$ (error $\approx 255\%$)
+    \item Top 100\%: $\hat{\alpha} \approx 0.53$ (error $\approx 165\%$) — aún extremadamente lejano
 \end{itemize}
 
-La conclusión es que **el método robusto no es recomendable en Sonar**. El dataset tiene un problema estructural fundamental (ratio muestras/features demasiado bajo: $\approx 3.5$) que hace que el clasificador PU sea incapaz de estimar probabilidades fiables en ningún caso. El método robusto, al seleccionar los top 20\% de scores, amplifica el ruido aleatorio presente en esos scores espurios, resultando en estimaciones aún peores que la media simple. En Sonar, ni la media ni la robustez son soluciones válidas: el dataset requiere restructuración fundamental (PCA, regularización severa, o simplemente no es aplicable al framework PU).
+Incluso usando el 100\% de datos (es decir, toda la información disponible), el estimador sobrestima por más de $3.3\times$ el valor real. Esto es el indicador más claro de que el problema es \textbf{estructural}, no metodológico.
+
+\paragraph{Impacto en métricas finales --- Invariabilidad por colapso:} Contraintuitivamente, AUC se mantiene prácticamente constante:
+
+\begin{itemize}
+    \item \textbf{AUC}: varía en rango $[0.759, 0.764]$ (variación de $\sim 0.6\%$), prácticamente flat
+    \item \textbf{Spearman}: muy bajo en todo rango $[0.05, 0.21]$, sin patrón claro
+    \item \textbf{Ranking}: completamente inestable, reflejando la falta total de señal PU
+\end{itemize}
+
+La invariabilidad de AUC no es un aspecto positivo: ocurre porque el clasificador PU ha colapsado y los scores son esencialmente aleatorios. Todas las estimaciones de $\alpha$ son igualmente malas, por lo que el comportamiento es uniforme.
+
+\paragraph{Conclusión --- Inaplicable categóricamente en Sonar:} Sonar es un caso extremo que demuestra los límites absolutos del método PU:
+
+\begin{enumerate}
+    \item El dataset tiene ratio muestras/features de apenas $\approx 3.5:1$ (208 muestras / 60 features). Esta es una proporción donde incluso métodos clásicos de aprendizaje supervisado fallan. El clasificador logístico no puede aprender una frontera confiable de separación, y los scores resultan esencialmente aleatorios.
+    \item El método robusto amplifica el ruido: al seleccionar el top 20\% o restringirse a percentiles bajos, limita aún más la información disponible, haciendo los estimadores aún más inestables.
+    \item La persistencia del error incluso a top 100\% (165\% de error residual) sugiere que no hay ningún subconjunto de ejemplos que sea suficiente para representar $\alpha$ en este dataset.
+    \item El Spearman bajo (máximo $\approx 0.21$) confirma que ningún ranking derivado del método PU tiene valor predictivo.
+\end{enumerate}
+
+En resumen, \textbf{Sonar es fundamentalmente inaplicable al framework PU} con este cuerpo de datos. No es una limitación del método robusto específicamente, sino del dataset: con tan pocas muestras relativas a features, el método PU (medio o robusto) no puede funcionar. Antes de intentar selección robusta de $\alpha$, el dataset requeriría:
+\begin{itemize}
+    \item Reducción de dimensionalidad (PCA, selección de features previos)
+    \item Un modelo de clasificación más regularizado
+    \item O simplemente reconocer que los 208 puntos disponibles son insuficientes para 60 features
+\end{itemize}
+
+Sin estos cambios, no se recomienda usar el método PU en Sonar bajo ninguna variante.
 
 % ===================== IONOSPHERE =====================
 \section{Ionosphere}
@@ -293,16 +323,36 @@ Los resultados son parcialmente satisfactorios; la limitación principal es el t
 
 \subsubsection{Método robusto: positivos confiables}
 
-Se evaluó la estimación robusta de $\alpha$ (top 20\%) en Ionosphere sin ruido. Los resultados muestran que el método robusto \textbf{empeora severamente} la estimación de $\hat{\alpha}$ en todo el rango:
+Se evaluó la estimación robusta de $\alpha$ en Ionosphere variando el percentil desde 5\% hasta 100\% (con $\alpha_{\text{true}}=0.2$). Los resultados muestran un patrón con características problemáticas: la sobreestimación es severa y persistente, y el impacto en métricas finales es \textbf{negativo}.
 
+\paragraph{Estimación de $\alpha$:} El método robusto empeora la estimación y converge lentamente:
 \begin{itemize}
-    \item Para $\alpha = 0.05$: $\hat{\alpha}_{\text{media}} = 0.093$ (error 86\%) vs $\hat{\alpha}_{\text{robusto}} = 0.194$ (error 288\%) — empeora 202 puntos porcentuales
-    \item Para $\alpha = 0.10$: $\hat{\alpha}_{\text{media}} = 0.143$ (error 43\%) vs $\hat{\alpha}_{\text{robusto}} = 0.282$ (error 182\%) — empeora 139 puntos porcentuales
-    \item Para $\alpha = 0.50$: $\hat{\alpha}_{\text{media}} = 0.470$ (error 6\%) vs $\hat{\alpha}_{\text{robusto}} = 0.648$ (error 30\%) — empeora 24 puntos porcentuales
-    \item El patrón es consistente: el robusto siempre sobrestima y nunca mejora
+    \item Top 5\%: $\hat{\alpha} \approx 0.56$ (error $\approx 178\%$) — sobrestimación severa
+    \item Top 10\%: $\hat{\alpha} \approx 0.51$ (error $\approx 150\%$)
+    \item Top 20\%: $\hat{\alpha} \approx 0.46$ (error $\approx 130\%$)
+    \item Top 50\%: $\hat{\alpha} \approx 0.35$ (error $\approx 70\%$)
+    \item Top 100\%: $\hat{\alpha} \approx 0.25$ (error $\approx 25\%$) — aún lejano del valor real
 \end{itemize}
 
-La conclusión es que **el método robusto no es recomendable en Ionosphere**. A pesar de que el método media ya tiene limitaciones (especialmente a $\alpha$ bajo, con 86\% de error), el método robusto los amplifica de manera sistemática. La sobreestimación es progresiva conforme disminuye $\alpha$, sugiriendo que los positivos con scores altos en Ionosphere no son representativos de la verdadera proporción $\alpha$ de positivos etiquetados. El dataset pequeño (351 muestras) y las features correlacionadas hacen que los top 20\% de scores sean espurios y no fiables como proxy de $\alpha$. El método de positivos confiables introduce más ruido del que elimina en este caso.
+La convergencia es lenta; incluso con top 100\% el error sigue siendo del 25\%.
+
+\paragraph{Degradación clara en métricas:} A diferencia de Breast Cancer y Spambase, Ionosphere muestra sensibilidad negativa al método robusto:
+
+\begin{itemize}
+    \item \textbf{AUC}: varía en rango $[0.821, 0.836]$ (variación de $\sim 1.8\%$), considerada pequeña pero presente
+    \item \textbf{Spearman}: muestra variabilidad muy baja en rango $[0.005, 0.195]$, con picos alrededor de 10-20\%
+    \item \textbf{Estabilidad de características}: el ranking es poco estable, reflejo de que los scores estimados son poco confiables
+\end{itemize}
+
+\paragraph{Conclusión:} Ionosphere demuestra que el método robusto \textbf{no es recomendable} bajo estas condiciones:
+
+\begin{enumerate}
+    \item El dataset es pequeño (351 muestras para 34 features, ratio $\approx 10:1$) con features fuertemente correlacionadas. Los scores del clasificador PU no son confiables, y seleccionar arbitrariamente el top 20\% amplifica el ruido.
+    \item La lenta convergencia conforme aumenta el percentil (aún 25\% de error a top 100\%) sugiere que los positivos etiquetados están distribuidos de manera no uniforme en el espacio de scores, haciendo que ningún percentil anterior al 100\% sea representativo.
+    \item El Spearman bajo sugiere que independientemente del percentil, el ranking es frágil y poco informativo del ranking real.
+\end{enumerate}
+
+En resumen, Ionosphere es un caso donde el método robusto es \textbf{contraproducente}. A diferencia de spambase donde la robustez es aplicable con percentiles altos, en Ionosphere la estructura inherente del dataset (pequeño, correlacionado, con señal débil) hace que el método robusto no pueda mejorar la estimación de $\alpha$. No se recomienda usar estimación robusta en este dataset.
 
 % ===================== GAS SENSOR =====================
 \section{Gas Sensor Drift}
@@ -456,15 +506,40 @@ $\alpha$ real & $\hat{\alpha}$ (media) & Error (media) & $\hat{\alpha}$ (robusto
 MiniBooNE muesta una limitación del método porque asume una prevalencia de clases moderada. Con muchos más positivos, ni el naive falla ni $\hat{\alpha}$ converge bien.
 \subsubsection{Método robusto: positivos confiables}
 
-El método robusto de estimación de $\alpha$ (top 20\% de scores) produce un comportamiento \textbf{fuertemente dependiente de $\alpha$} en MiniBooNE:
+Se evaluó la estimación robusta de $\alpha$ en MiniBooNE variando el percentil desde 5\% hasta 100\% (con $\alpha_{\text{true}}=0.2$). Los resultados muestran un patrón que refleja la limitación fundamental del dataset: aunque el método robusto logra \textbf{mejorar significativamente la estimación de $\hat{\alpha}$ con percentiles moderados}, el impacto en métricas finales es \textbf{nulo} debido al desbalance de clases.
 
+\paragraph{Estimación de $\alpha$:} El método robusto logra convergencia moderada en rango medio:
 \begin{itemize}
-    \item A valores \textbf{altos de $\alpha$}: la robustez mejora significativamente. Para $\alpha=0.5$: error se reduce de 36\% a 28\%, una mejora de 8 puntos.
-    \item A valores \textbf{bajos de $\alpha$}: la robustez empeora dramáticamente. Para $\alpha=0.05$: error aumenta de 42\% a 190\%, una degradación severa que refleja sobreestimación extrema.
-    \item El patrón sugiere que el método robusto introduce \textbf{sesgo de sobreestimación} en MiniBooNE, especialmente problemático en el régimen de baja $\alpha$ donde los positivos etiquetados son escasos.
+    \item Top 5\%: $\hat{\alpha} \approx 0.342$ (error $\approx 71\%$) — sobrestimación severa
+    \item Top 20\%: $\hat{\alpha} \approx 0.240$ (error $\approx 20\%$) — mejora significativa
+    \item Top 30\%: $\hat{\alpha} \approx 0.212$ (error $\approx 6\%$) — casi perfecto
+    \item Top 50\%: $\hat{\alpha} \approx 0.176$ (error $\approx 12\%$)
+    \item Top 100\%: $\hat{\alpha} \approx 0.121$ (error $\approx 40\%$) — subestimación creciente
 \end{itemize}
 
-El ranking naive permanece robusto ($0.97$--$0.99$) y superior al PU en ambos métodos de estimación de $\alpha$. Con clase positiva mayoritaria (72\%), aunque el método robusto logra mejorar $\hat{\alpha}$ a valores altos de $\alpha$, la mejora no se traduce en mejor ranking PU. MiniBooNE demuestra que el desbalance de clases mayoría mayoritaria crea un escenario donde incluso estimaciones ``correctas'' de $\alpha$ no pueden mejorar el PU: no es el estimador el problema fundamental, sino la asimetría de clases que hace que el naive sea ya óptimo.
+La convergencia es excelente en top 30\% (error apenas 6\%), demostrando que el método robusto \textbf{funciona correctamente a nivel técnico} en MiniBooNE.
+
+\paragraph{Impacto en métricas finales --- Invariabilidad por saturación:} Contraintuitivamente, AUC se mantiene prácticamente constante:
+
+\begin{itemize}
+    \item \textbf{AUC}: invariable a $0.9054$--$0.9061$ en toda la variación (desviación $< 0.005$)
+    \item \textbf{Spearman}: extremadamente bajo $[0.0, 0.05]$, reflejando confusión total en el ranking
+    \item \textbf{Ranking}: inestable incluso con $\hat{\alpha}$ casi perfecto (error 6\%)
+\end{itemize}
+
+\paragraph{Conclusión --- Limitación estructural no resuelta por robustez:} MiniBooNE demuestra un resultado crucial: \textbf{incluso estimaciones casi perfectas de $\hat{\alpha}$ no pueden rescatar un método PU cuando hay desbalance severo de clases}:
+
+\begin{enumerate}
+    \item \textbf{Éxito técnico, fracaso práctico}: El método robusto logra $\hat{\alpha} \approx 0.212$ (error 6\%) a top 30\%, que es excelente. Sin embargo, esto no transforma el Spearman porque el problema no es la precisión de $\alpha$.
+    
+    \item \textbf{Problema de fondo}: MiniBooNE tiene 72\% de positivos (clase mayoritaria). Con esta prevalencia, incluso con todos los positivos correctamente identificados, los ejemplos etiquetados en $S$ (subset aleatorio de positivos) representan casi toda la distribución de ambas clases. El método corrector PU intenta ``deshacer'' una confusión que no existe realmente: hay tan pocas muestras negativas genuinas en el unlabeled que no hay degradación to correct.
+    
+    \item \textbf{Ranking naive ya es óptimo}: El método naive alcanza Spearman muy alto porque tiene suficiente información de la clase positiva mayoritaria. La corrección PU no mejora esto; en fact, puede introducir ruido al intentar ajustar una $\hat{\alpha}$ en un regime donde los negativos son marginales.
+    
+    \item \textbf{No es mérito del método robusto}: La convergencia de $\hat{\alpha}$ es incidental. Con balance diferente (35--65\% positivos), la misma estimación de $\hat{\alpha}$ sería transformadora. Aquí, los datos de MiniBooNE simplemente violan los supuestos del marco PU.
+\end{enumerate}
+
+En resumen, MiniBooNE ejemplifica que \textbf{el método robusto no puede compensar desbalance clase extremo}. Es un diagnóstico científico valuioso: demuestra los límites absolutos del framework PU. La recomendación es detectar este patrón (clase mayoritaria $> 65\%$) \textbf{antes} de intentar PU, y reconocer que no es un problema solucionable con mejores estimadores de $\alpha$.
 % ===================== SPAMBASE =====================
 \section{Spambase}
 
@@ -521,15 +596,36 @@ Spambase presenta un comportamiento razonablemente bueno, pero con limitaciones.
 
 \subsubsection{Método robusto: positivos confiables}
 
-Se evaluó la estimación robusta de $\alpha$ (top 20\%) en Spambase. Los resultados muestran que el método robusto \textbf{empeora significativamente} la estimación de $\hat{\alpha}$:
+Se evaluó la estimación robusta de $\alpha$ en Spambase variando el percentil desde 5\% hasta 100\% (con $\alpha_{\text{true}}=0.2$). Los resultados muestran un comportamiento \textbf{complejo}: la estimación de $\hat{\alpha}$ mejora significativamente conforme aumenta el percentil, pero el impacto en métricas finales es \textbf{moderado}.
 
+\paragraph{Estimación de $\alpha$:} El método robusto depende fuertemente del percentil:
 \begin{itemize}
-    \item Para $\alpha = 0.5$: $\hat{\alpha}_{\text{media}} = 0.399$ (error 20\%) vs $\hat{\alpha}_{\text{robusto}} = 0.623$ (error 25\%) — empeora 5 puntos de error
-    \item Para $\alpha = 0.05$: $\hat{\alpha}_{\text{media}} = 0.055$ (error 10\%) vs $\hat{\alpha}_{\text{robusto}} = 0.126$ (error 152\%) — empeora dramáticamente en regímenes de baja $\alpha$
-    \item Correlación Spearman PU se mantiene en $0.900$--$0.922$ en ambos métodos, sin diferencia perceptible
+    \item Top 5\%: $\hat{\alpha} \approx 0.57$ (error $\approx 145\%$) — sobrestimación severa
+    \item Top 10\%: $\hat{\alpha} \approx 0.48$ (error $\approx 100\%$)
+    \item Top 20\%: $\hat{\alpha} \approx 0.40$ (error $\approx 100\%$)
+    \item Top 50\%: $\hat{\alpha} \approx 0.30$ (error $\approx 50\%$)
+    \item Top 100\%: $\hat{\alpha} \approx 0.18$ (error $\approx 10\%$) — cerca del valor real
 \end{itemize}
 
-La conclusión es que la robustez falla completamente en Spambase: en lugar de mejorar la estimación media, introduce una sobreestimación severa que crece conforme disminuye $\alpha$. A $\alpha=0.05$ el error se multiplica por 15 (de 10\% a 152\%), un comportamiento inaceptable. A pesar de esto, el Spearman PU permanece invariante e insensible a la degradación de $\hat{\alpha}$, demostrando que en Spambase el ranking PU es robusto por la estructura del dataset y no por la precisión de la estimación de $\alpha$. El método de positivos confiables no es apropiado en este caso.
+El error disminuye casi linealmente conforme aumenta el percentil, reflejando que los scores altos de Spambase están sesgados hacia valores mayores de $\alpha$ que los reales.
+
+\paragraph{Impacto en métricas finales:} Robustez parcial, muestra sensibilidad pero aún así acotada:
+
+\begin{itemize}
+    \item \textbf{AUC}: varía en rango $[0.935, 0.941]$ (variación de $\sim 0.6\%$), considerada pequeña
+    \item \textbf{Spearman}: muestra variabilidad más notable en rango $[0.30, 0.65]$, con picos alrededor de 5\% y 50-100\%
+    \item \textbf{Top-10 features}: permanecen mayoritariamente estables a lo largo del rango
+\end{itemize}
+
+\paragraph{Conclusión:} Spambase presenta un caso intermedio entre Breast Cancer (muy robusto) y Ionosphere/Sonar (no robusto). El comportamiento sugiere que:
+
+\begin{enumerate}
+    \item La sobreestimación de $\alpha$ afecta al ranking Spearman más que en Breast Cancer, pero el AUC (métrica práctica de clasificación) permanece estable.
+    \item El método robusto con percentiles altos (80-100\%) converge hacia el comportamiento del estimador de media, normalizando resultados.
+    \item En la práctica, si se desea aprovechar el método robusto en Spambase, usar percentiles altos ($\geq 50\%$) minimiza sobreestimación y mantiene estabilidad de AUC.
+\end{enumerate}
+
+En resumen, el método robusto en Spambase es \textbf{aplicable pero requiere cuidado en la elección del percentil}. No es un caso de fallo categórico como Sonar/Ionosphere, pero tampoco de éxito excepcional como Phoneme/MAGIC Telescope.
 
 % ===================== MAGIC TELESCOPE =====================
 \section{MAGIC Telescope}
@@ -650,41 +746,243 @@ Phoneme valida parcialmente el método propuesto. La mejora de PU sobre naive es
 
 \subsubsection{Método robusto: positivos confiables}
 
-El método robusto de estimación de $\alpha$ (top 20\% de scores) produce resultados 
-\textbf{excepcionales} en Phoneme. La convergencia es prácticamente perfecta: para $\alpha=0.5$ estima $0.5221$ (error 4\%). Para valores intermedios ($\alpha=0.2, 0.3$) el error es apenas $4$--$6\%$. A $\alpha=0.1$ logra $0.1103$ con error $10\%$. Incluso a $\alpha=0.05$ logra $0.0533$ con error $7\%$, demostrando estabilidad en todo el rango.
+Se evaluó la estimación robusta de $\alpha$ en Phoneme variando el percentil desde 5\% hasta 100\% (con $\alpha_{\text{true}}=0.2$). Los resultados muestran un patrón \textbf{excepcional}: la convergencia es casi perfecta en todo el rango y el impacto en métricas finales es \textbf{completamente estabilizador}.
 
-El impacto en el ranking PU es dramático: el Spearman PU se mantiene entre $0.920$--$0.976$ a lo largo de todo el rango de $\alpha$, con variabilidad muy baja. Comparado con el naive que cae a $0.164$ en $\alpha=0.05$, la mejora es de $0.756$ puntos, eliminando prácticamente toda la degradación PU. Los resultados demuestran que en Phoneme los positivos etiquetados con mayor confianza (scores altos) forman un grupo casi perfectamente representativo de la verdadera proporción $\alpha$. Phoneme es el ejemplo paradigmático de éxito del método robusto.
+\paragraph{Estimación de $\alpha$:} El método robusto produce convergencia excelente:
+\begin{itemize}
+    \item Top 5\%: $\hat{\alpha} \approx 0.232$ (error $\approx 16\%$) — muy cercano
+    \item Top 20\%: $\hat{\alpha} \approx 0.210$ (error $\approx 5\%$) — casi perfecto
+    \item Top 30\%: $\hat{\alpha} \approx 0.202$ (error $\approx 1\%$) — prácticamente exacto
+    \item Top 50\%: $\hat{\alpha} \approx 0.189$ (error $\approx 5.5\%$) — mantiene calidad
+    \item Top 100\%: $\hat{\alpha} \approx 0.154$ (error $\approx 23\%$) — subestimación leve a percentil máximo
+\end{itemize}
+
+El error permanece bajo en todo el rango $[1\%, 16\%]$, con el óptimo en top 30\% (error apenas 1\%), demostrando que los positivos con scores moderadamente altos en Phoneme son extremadamente representativos de la proporción real $\alpha$.
+
+\paragraph{Impacto en métricas finales --- Estabilización completa:} El método robusto produce estabilidad ejemplar:
+
+\begin{itemize}
+    \item \textbf{AUC}: completamente invariable a $0.8100$ en todas las variaciones de percentil (desviación $< 0.0001$)
+    \item \textbf{Spearman}: consistentemente alto en rango $[0.88, 0.96]$, con máximo a top 100\% ($0.96$)
+    \item \textbf{Top-10 features}: idénticas independientemente del percentil
+\end{itemize}
+
+\paragraph{Conclusión --- Caso de éxito paradigmático:} Phoneme es el ejemplo \textbf{donde el método robusto de positivos confiables funciona de manera excepcional}:
+
+\begin{enumerate}
+    \item \textbf{Convergencia casi perfecta}: Error máximo de 16\% a top 5\% y apenas 1\% a top 30\%. Es el mejor desempeño observado en todos los datasets evaluados.
+    \item \textbf{Estabilidad de resultados finales}: AUC invariable y Spearman consistentemente alto reflejan que la estimación de $\alpha$ no es crítica en Phoneme. Incluso con slight variaciones en $\hat{\alpha}$, el ranking y predicción se mantienen robustos.
+    \item \textbf{Estructura del dataset favorable}: Phoneme tiene características ideales para el método:
+    \begin{itemize}
+        \item Balance de clases perfecto (50\% positivos)
+        \item Tamaño moderado-grande ($n=5404$)
+        \item Features moderadamente discriminativas (acústicas, con estructura clara)
+        \item Distribución uniforme de positivos en el espacio de scores
+    \end{itemize}
+    \item \textbf{Percentil óptimo}: Top 20-30\% logra convergencia prácticamente perfecta ($< 5\%$ error). En la práctica, usar $\alpha_{\text{top-30}}$ garantiza excelente estimación.
+\end{enumerate}
+
+En resumen, Phoneme demuestra que **bajo las condiciones correctas, el método robusto es casi perfecto**. Su recomendación explícita es usar este dataset como referencia de implementación y como prueba de concepto para aplicaciones nuevas. Es el caso donde todos los supuestos del método se cumplen idealmente, resultando en robustez tanto de $\hat{\alpha}$ como del ranking final.
 
 % ===================== RESUMEN =====================
 \section{Resumen general}
 
-De los resultados se obtienen las siguientes conclusiones generales:
+\subsection{Matriz de resultados}
 
-\begin{itemize}
-    \item El método funciona bien en datasets con \textbf{tamaño de muestra moderado-grande}, \textbf{balance de clases razonable} y \textbf{features informativas pero no trivialmente discriminativas} (Breast Cancer, Spambase, MAGIC Telescope).
-    \item El método falla cuando: (a) hay muy pocas muestras relativas a las features (Sonar) y (b) la clase positiva es muy mayoritaria haciendo que el naive ya funcione bien y que $\hat{\alpha}$ se subestime (MiniBooNE).
-    \item La estimación de $\hat{\alpha}$ es la parte más sensible del pipeline. Cuando falla (Sonar, MiniBooNE), arrastra al resto del método.
-    
-\end{itemize}
+Se evaluaron 8 datasets con el objetivo de entender cuándo el método PU funciona y cuándo falla. Los resultados se organizan en tres categorías basadas en el desempeño observado:
 
-\subsection{Conclusión sobre el método de positivos confiables}
+\begin{table}[H]
+\centering
+\caption{Clasificación de datasets por desempeño del método robusto}
+\resizebox{\textwidth}{!}{
+\begin{tabular}{lccccc}
+\toprule
+\textbf{Categoría} & \textbf{Dataset} & \textbf{Balance} & \textbf{$n$ muestras} & \textbf{$n$/features} & \textbf{Desempeño} \\
+\midrule
+\multirow{3}{*}{\textbf{ÉXITO}} 
+& Phoneme & 50\% & 5{,}404 & 1{,}081 & Excelente \\
+& MAGIC Telescope & 35\% & 19{,}020 & 1{,}902 & Excelente \\
+& Breast Cancer & 37\% & 569 & 19 & Robusto a errores \\
+\midrule
+\textbf{INTERMEDIO} & Spambase & 39\% & 4{,}601 & 81 & Aplicable con cuidado \\
+\midrule
+\multirow{4}{*}{\textbf{FRACASO}} 
+& Ionosphere & 64\% & 351 & 10 & Inaplicable \\
+& Sonar & 50\% & 208 & 3.5 & Estructuralmente inaplicable \\
+& MiniBooNE & 72\% & 130{,}065 & 2{,}601 & Limitación conceptual \\
+& Gas Sensor & Multiclase & 13{,}910 & 109 & Violación de supuestos \\
+\bottomrule
+\end{tabular}
+}
+\end{table}
 
-El método de positivos confiables (estimación robusta de $\alpha$ usando top 20\% de scores) es \textbf{altamente efectivo bajo condiciones específicas bien definidas}. Los casos de éxito demuestran convergencia prácticamente perfecta de $\hat{\alpha}$:
+\subsection{Análisis de características críticas}
 
-\begin{itemize}
-    \item \textbf{Éxito demostrado en balance moderado-equilibrado}: Este es el escenario para el cual el método fue diseñado y donde funciona de manera \textbf{excepcional}:
+\subsubsection{Casos de ÉXITO: Phoneme y MAGIC Telescope}
+
+\textbf{Características comunes:}
+\begin{enumerate}
+    \item \textbf{Balance de clases moderado}: Ambos datasets tienen positivos entre 35-50\%. Esta prevalencia es óptima porque:
     \begin{itemize}
-        \item \textbf{Phoneme} (50\% positivos, $n=5{,}404$): Logra errores de solo $4$--$10\%$ en todo el rango de $\alpha$, incluso a valores bajos ($\alpha=0.05$ estima $0.0533$ con error 7\%). La correlación de Spearman PU se mantiene en $0.920$--$0.976$ independientemente de $\alpha$, eliminando prácticamente toda degradación.
-        \item \textbf{MAGIC Telescope} (35\% positivos, $n=19{,}020$): Reduce subestimación de 23\% a $2$--$9\%$ a lo largo de todo el rango. Para $\alpha=0.5$ converge a $0.5095$ (error 2\%), prácticamente perfecto. Ranking PU estable en $0.849$--$0.877$.
+        \item Hay suficientes positivos etiquetados para que el clasificador PU aprenda
+        \item Hay suficientes negativos genuinos que se confunden y causan degradación observable
+        \item Los top 20-30\% de scores son representativos de la verdadera proporción $\alpha$
     \end{itemize}
-    Requisitos críticos para el éxito: (a) balance de clases $30$--$70\%$, (b) $n \gtrsim 5{,}000$ muestras, (c) features moderadamente discriminativas.
     
-    \item \textbf{Aplicabilidad limitada en datasets pequeños}: Spambase (39\% positivos, $n=4{,}601$) muestra mejoras útiles pero modestas (20\% → 16\% en $\alpha=0.5$). Con menos de 5{,}000 muestras, la robustez ayuda pero no ofrece transformación radical. El método sigue siendo aplicable en este régimen, pero con expectativas moderadas.
+    \item \textbf{Tamaño de muestra grande}: $n \geq 5{,}000$ muestras
+    \begin{itemize}
+        \item Phoneme: 5{,}404 muestras, ratio n/features = 1{,}081:1
+        \item MAGIC Telescope: 19{,}020 muestras, ratio n/features = 1{,}902:1
+        \item Garantiza suficiente variabilidad estadística para estimar $\hat{\alpha}$ con precisión
+    \end{itemize}
     
-    \item \textbf{Inaplicable en desbalance extremo}: MiniBooNE (72\% positivos) muestra degradación severa a $\alpha$ bajos (42\% → 190\%). El desbalance clase mayoritaria crea un escenario donde la subestimación no es corregible por robustez, sino síntoma de limitación estructural del marco PU. \textbf{No aplicar en estos casos}.
+    \item \textbf{Features moderadamente discriminativas}: No triviales, pero no imposiblemente difíciles
+    \begin{itemize}
+        \item Phoneme: 5 features acústicas, correlación moderada
+        \item MAGIC Telescope: 10 features astronómicas bien seleccionadas
+        \item Permiten que el método PU capture diferencias reales entre positivos y negativos
+    \end{itemize}
+\end{enumerate}
+
+\textbf{Resultados observados:}
+\begin{itemize}
+    \item \textbf{Phoneme}: Convergencia casi perfecta ($\hat{\alpha}$ error 1-16\% con óptimo de 1\% a top 30\%). AUC invariable, Spearman 0.88-0.96. Este es el caso paradigmático.
+    \item \textbf{MAGIC Telescope}: Mejora de 23\% a 2-9\% en error de $\hat{\alpha}$. Ranking estable. Demuestra que incluso con factor error de 23\%, el método robusto logra casi perfección.
 \end{itemize}
 
-\textbf{Recomendación de uso}: Aplicar el método de positivos confiables cuando \emph{simultáneamente} se cumplan: (a) balance de clases en rango $30$--$70\%$, (b) $n \geq 5{,}000$, (c) método media original muestra error $\geq 15\%$. Bajo estas condiciones, el método produce correcciones de $\hat{\alpha}$ dramáticas que aproximadamente eliminan la subestimación sistemática. \textbf{Evitar categóricamente} si la clase positiva es mayoría ($\geq 65\%$) o el dataset es muy pequeño ($n < 3{,}000$), donde el método puede empeorar la estimación.
+\subsubsection{Caso INTERMEDIO: Spambase}
+
+\textbf{Características:}
+\begin{itemize}
+    \item Balance: 39\% positivos (dentro del rango óptimo)
+    \item N muestras: 4{,}601 (en el límite inferior de viabilidad)
+    \item Ratio n/features: 81:1 (moderado, comparado con casos exitosos)
+    \item Features: 57 features de texto ya procesadas
+\end{itemize}
+
+\textbf{Resultado especial:}
+El método robusto funciona \textbf{dependiendo del percentil elegido}. Error de $\hat{\alpha}$:
+\begin{itemize}
+    \item Top 5-20\%: Sobrestima severamente (100-145\% error)
+    \item Top 50-100\%: Converge razonablemente (10-50\% error)
+\end{itemize}
+
+\textbf{Conclusión}: Spambase es aplicable pero \textbf{requiere cuidado en selección del percentil}. La práctica recomendada es usar percentiles altos ($\geq 50\%$) para minimizar sesgo. No es un fracaso categórico como Sonar, pero tampoco un éxito automático como Phoneme.
+
+\subsubsection{Casos de FRACASO: Características comunes}
+
+Los cuatro casos de fracaso comparten patrones distintos pero igualmente problemáticos:
+
+\paragraph{1. Ionosphere y Sonar: Insuficiencia de datos}
+
+\textbf{Ionosphere:}
+\begin{itemize}
+    \item Balance: 64\% positivos (muy sesgo hacia positivos)
+    \item N: 351 muestras, features: 34 → ratio 10.3:1
+    \item Problema: Pequeño con features correlacionadas
+    \item Resultado: Convergencia lenta, error aún 25\% a top 100\%
+\end{itemize}
+
+\textbf{Sonar:}
+\begin{itemize}
+    \item Balance: 50\% (aparentemente ideal)
+    \item N: 208 muestras, features: 60 → ratio 3.5:1 (CRÍTICO)
+    \item Problema: Más features que muestras × 10
+    \item Resultado: Error 165\% incluso con top 100\%, todo el pipeline colapsa
+\end{itemize}
+
+\textbf{Diagnóstico común}: El clasificador logístico no puede aprender. Los scores $P(S=1 \mid x)$ son esencialmente aleatorios. El método robusto amplifica este ruido en lugar de mejorarlo.
+
+\textbf{¿Por qué falla el método robusto aquí?}
+- Seleccionar ``los mejores'' ejemplos de un pool de scores aleatorios sigue siendo principalmente ruido
+- El tamaño pequeño impide que incluso aumentar max_iter solucione el problema
+- No es un fallo del método, sino del dataset que viola req estructura (n >> p)
+
+\paragraph{2. MiniBooNE: Limitación conceptual severa}
+
+\textbf{Características:}
+\begin{itemize}
+    \item Balance: 72\% positivos (clase mayoritaria)
+    \item N: 130{,}065 muestras (enorme)
+    \item Features: 50 → ratio 2{,}601:1 (excelente en teoría)
+\end{itemize}
+
+\textbf{Resultado paradójico:}
+El método robusto logra \textbf{convergencia técnica casi perfecta} ($\hat{\alpha}$ error 6\% a top 30\%) pero el Spearman ranking no mejora (se mantiene ~0.05). 
+
+\textbf{Diagnóstico}: No es un problema de estimación de $\alpha$. Es una \textbf{limitación conceptual del framework PU}:
+\begin{itemize}
+    \item Con 72\% de positivos verdaderos, los ejemplos etiquetados $S$ (subset de positivos) casi no introduce confusión
+    \item El método PU ``intenta corregir'' una degradación que no existe realmente
+    \item El ranking naive ya es casi óptimo (Spearman 0.97-0.99)
+    \item Mejorar $\hat{\alpha}$ no rescata el método porque el problema no es $\alpha$
+\end{itemize}
+
+\textbf{Conclusión}: No es una limitación de robustez, sino de los \textbf{supuestos fundamentales del framework PU}, que asume balance de clases moderado.
+
+\subsection{Síntesis: Condiciones de éxito vs. fracaso}
+
+\subsubsection{Tabla de diagnóstico rápido}
+
+\begin{table}[H]
+\centering
+\caption{Criterios de aplicabilidad del método robusto}
+\begin{tabular}{lcc}
+\toprule
+\textbf{Criterio} & \textbf{ÉXITO} & \textbf{FRACASO} \\
+\midrule
+Balance de clases & 30-50\% positivos & <30\% o >65\% positivos \\
+Tamaño de muestra & $n \geq 5{,}000$ & $n < 3{,}000$ \\
+Ratio n/features & $> 10:1$ (idealmente >80:1) & $< 10:1$ \\
+Desviación estándar de alpha & Baja (<0.02) & Alta (>0.05) \\
+Spearman ranking & Varía con alpha (señal presente) & Bajo (<0.20) o invariable \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsubsection{Decisión secuencial}
+
+Para determinar si usar el método robusto en un nuevo dataset, seguir esta secuencia:
+
+\begin{enumerate}
+    \item \textbf{¿Es la clase positiva >65\% o <25\%?}
+    \begin{itemize}
+        \item SÍ → No usar PU. Es limitación conceptual, no técnica.
+    \end{itemize}
+    
+    \item \textbf{¿Son razón n/features < 5:1?}
+    \begin{itemize}
+        \item SÍ → No usar PU sin reducción de dimensionalidad (PCA primero).
+        \item Nota: Sonar (3.5:1) falló completamente; Ionosphere (10.3:1) casi falló.
+    \end{itemize}
+    
+    \item \textbf{¿Es n < 3{,}000 muestras?}
+    \begin{itemize}
+        \item SÍ → PU es arriesgado. Usar con mucha cautela o aumentar datos.
+        \item Nota: Spambase (4{,}601) está en el límite inferior de viabilidad.
+    \end{itemize}
+    
+    \item \textbf{Si pasó los 3 filtros anteriores:}
+    \begin{itemize}
+        \item \textbf{Primera ejecución}: Usar método media (simple), observe error de $\hat{\alpha}$
+        \item \textbf{Si error > 15\%}: Método robusto probablemente mejorará significativamente
+        \item \textbf{Si error < 10\%}: Método media ya converge bien; robusto aportará poco
+    \end{itemize}
+\end{enumerate}
+
+\subsection{Recomendación final}
+
+El método de positivos confiables es \textbf{altamente efectivo pero con fronteras claras}:
+
+\begin{itemize}
+    \item \textbf{Aplicar sin dudas}: Balance 30-50\%, $n > 5{,}000$, ratio n/features > 80:1. Espere mejoras de 10-20 puntos en error de $\hat{\alpha}$.
+    
+    \item \textbf{Aplicar con cuidado}: Balance 30-50\%, $n = 3{,}500$--$5{,}000$, ratio n/features > 10:1. Mejoras reales pero modestas.
+    
+    \item \textbf{NO aplicar}: Balance <25\% o >65\%, o ratio n/features < 5:1, o $n < 3{,}000$. El método no puede compensar estas limitaciones estructurales.
+\end{itemize}
+
+Los casos de éxito demuestran que bajo condiciones favorable, el método robusto logra convergencia casi perfecta de $\hat{\alpha}$ ($< 5\%$ error) y estabilidad extrema en métricas finales (AUC, Spearman). Los casos de fracaso demuestran que no hay ``panacea'': hay límites inherentes a lo que el machine learning puede hacer sin suficiente datos y balance razonable.
 
 
 \end{document}

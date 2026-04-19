@@ -16,7 +16,7 @@ def evaluar_clasificador_final(X_train, X_test, y_train, y_test, ranking, k):
 
     modelo = Pipeline([
         ("escalado", StandardScaler()),
-        ("clasificador", LogisticRegression(max_iter=1000))
+        ("clasificador", LogisticRegression(max_iter=5000))
     ])
 
     modelo.fit(X_train[:, features_seleccionadas], y_train)

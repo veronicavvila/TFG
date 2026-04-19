@@ -7,6 +7,7 @@ import mlflow
 from mlflow.tracking import MlflowClient
 from sklearn.model_selection import train_test_split, StratifiedKFold
 from sklearn.linear_model import LogisticRegression
+from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import roc_auc_score
 from scipy.stats import spearmanr
 
@@ -327,9 +328,13 @@ def _sweep_percent(X, y, feature_names, estimation_method):
             X_train_selected = X_train[:, top_k_features]
             
             # Evaluar AUC con features variables
-            lr = LogisticRegression(random_state=seed, max_iter=1000)
-            lr.fit(X_train_selected, y_train)
-            auc = roc_auc_score(y_test, lr.predict_proba(X_test_selected)[:, 1])
+            scaler = StandardScaler()
+            X_train_scaled = scaler.fit_transform(X_train_selected)
+            X_test_scaled = scaler.transform(X_test_selected)
+            
+            lr = LogisticRegression(random_state=seed, max_iter=5000)
+            lr.fit(X_train_scaled, y_train)
+            auc = roc_auc_score(y_test, lr.predict_proba(X_test_scaled)[:, 1])
             
             # Calcular Spearman entre ranking PU y ranking real
             spearman_corr, _ = spearmanr(ranking_pu, ranking_real)
@@ -552,7 +557,7 @@ def main():
             mlflow.log_metric("alpha_estimated", float(alpha_hat))
 
             p_y = estimar_probabilidad_real(scores, alpha_hat)
-            kfold = StratifiedKFold(n_splits=5, shuffle=True, random_state=RANDOM_STATE)
+            kfold = StratifiedKFold(n_splits=3, shuffle=True, random_state=RANDOM_STATE)
             
             for fold_idx, (train_idx, test_idx) in enumerate(kfold.split(X_noisy, y)):
                 X_train = X_noisy[train_idx]

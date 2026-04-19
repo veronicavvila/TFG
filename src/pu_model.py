@@ -30,7 +30,7 @@ def entrenar_clasificador_pu(X, S, random_state=None):
         ("clasificador", LogisticRegression(
             penalty="l2",
             solver="lbfgs",
-            max_iter=1000,
+            max_iter=5000,
             random_state=random_state
         ))
     ])
