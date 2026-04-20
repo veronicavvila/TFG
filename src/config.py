@@ -4,7 +4,7 @@ SWEEP_MODE = 'alpha'  # 'alpha' o 'percent'
                       # - 'alpha': varía ALPHA_TRUE, usa ALPHA_ESTIMATION_METHOD
                       # - 'percent': varía TOP_Q_PERCENT (fuerza ALPHA_ESTIMATION_METHOD='mean' automáticamente)
 
-# Dataset a utilizar (cambia esto para ejecutar otro dataset desde la misma rama)
+# Dataset a utilizar 
 # Opciones soportadas:
 #   - OpenML: magic_telescope, ionosphere, spambase, sonar, miniboone, phoneme
 #   - Sklearn: breast_cancer
