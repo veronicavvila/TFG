@@ -3,9 +3,12 @@
 #   - OpenML: magic_telescope, ionosphere, spambase, sonar, miniboone, phoneme
 #   - Sklearn: breast_cancer
 #   - Libsvm: gas_sensor_drift
-#   - Microarray: colon_cancer
+#   - Microarray: colon_cancer, prostate_cancer, lung_cancer
 DATASET = "spambase"  
-VALID_DATASETS = ['breast_cancer', 'ionosphere', 'sonar', 'colon_cancer', 'gas_sensor_drift', 'miniboone', 'spambase', 'telescope', 'phonome']
+VALID_DATASETS = [
+    'breast_cancer', 'ionosphere', 'sonar', 'miniboone', 'spambase', 'telescope', 'phonome',
+    'colon_cancer', 'prostate_cancer', 'lung_cancer', 'gas_sensor_drift'
+]
 assert DATASET in VALID_DATASETS, f"Dataset debe ser uno de: {VALID_DATASETS}"
 
                            

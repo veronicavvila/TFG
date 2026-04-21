@@ -97,79 +97,94 @@ def available_datasets() -> Tuple[str, ...]:
     return tuple(sorted(_DATASETS.keys()))
 
 
-def _download_microarray_dataset(dataset_name: str, dataset_key: str, cache_dir: str) -> None:
-    """Descarga automáticamente un dataset de microarray desde GEO Database."""
-    try:
-        import GEOparse
-    except ImportError:
-        raise ImportError(
-            f"GEOparse no instalado. Para usar datasets microarray:\n"
-            f"  pip install GEOparse\n"
-            f"Luego intenta de nuevo."
-        )
+def _download_dataset(dataset_key: str, cache_dir: str) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Descarga dataset de microarray desde scikit-feature repository.
     
-    geo_map = {
-        "colon_cancer": ("GSE5847", "Colon Cancer"),
-        "prostate_cancer": ("GSE3039", "Prostate Cancer"),
-        "lung_cancer": ("GSE7670", "Lung Cancer"),
+    Fuente: https://github.com/jundongl/scikit-feature
+    
+    Datasets:
+    - colon_cancer:     62 samples × 2000 features
+    - prostate_cancer: 102 samples × 6000 features
+    - lung_cancer:     181 samples × 12000 features
+    """
+    import os
+    import urllib.request
+    
+    scikit_feature_urls = {
+        "colon_cancer": "https://raw.githubusercontent.com/jundongl/scikit-feature/master/skfeature/data/colon.mat",
+        "prostate_cancer": "https://raw.githubusercontent.com/jundongl/scikit-feature/master/skfeature/data/prostate.mat",
+        "lung_cancer": "https://raw.githubusercontent.com/jundongl/scikit-feature/master/skfeature/data/lung.mat",
     }
     
-    if dataset_key not in geo_map:
-        raise ValueError(f"No GEO mapping for {dataset_key}")
+    if dataset_key not in scikit_feature_urls:
+        raise ValueError(f"Dataset {dataset_key} no disponible")
     
-    geo_id, display_name = geo_map[dataset_key]
-    print(f"Descargando {display_name} desde GEO ({geo_id})...")
+    url = scikit_feature_urls[dataset_key]
+    mat_file = os.path.join(cache_dir, f"{dataset_key}.mat")
     
-    try:
-        gse = GEOparse.get_GEO(geo=geo_id, destdir=cache_dir, silent=False)
-    except Exception as e:
-        raise RuntimeError(f"Error descargando de GEO: {e}")
-    
-    X_list = []
-    y_list = []
-    feature_names = None
-    
-    for gsm_name, gsm in gse.gsms.items():
+    # Descargar si no existe
+    if not os.path.exists(mat_file):
+        print(f"Descargando {dataset_key} desde scikit-feature...")
         try:
-            values = gsm.table['VALUE'].values
-            X_list.append(values)
-            
-            # Guardar nombres de features del primer sample
-            if feature_names is None:
-                feature_names = gsm.table.index.values
-            
-            # Extraer label del título
-            title = gsm.metadata.get('title', [''])[0].lower()
-            
-            if dataset_key == "colon_cancer":
-                y_list.append(1 if 'tumor' in title else 0)
-            elif dataset_key == "prostate_cancer":
-                y_list.append(1 if 'tumor' in title else 0)
-            elif dataset_key == "lung_cancer":
-                y_list.append(1 if 'adeno' in title else 0)
+            urllib.request.urlretrieve(url, mat_file)
+            print(f" {dataset_key} descargado: {mat_file}")
         except Exception as e:
-            print(f"  Skipping sample {gsm_name}: {e}")
-            continue
+            raise RuntimeError(
+                f"Error descargando {dataset_key}:\n{e}\n"
+                f"Intenta descargar manualmente desde: {url}"
+            )
     
-    if not X_list:
-        raise RuntimeError(f"No samples extracted from {display_name}")
+    # Cargar archivo .mat usando scipy
+    try:
+        from scipy.io import loadmat
+    except ImportError:
+        raise ImportError("scipy no instalado. Ejecuta: pip install scipy")
     
-    X = np.array(X_list, dtype=np.float32)  # Shape: (n_samples, n_features)
-    y = np.array(y_list, dtype=int)
+    mat_data = loadmat(mat_file)
     
-    # Si no tenemos feature names, generarlas
-    if feature_names is None or len(feature_names) == 0:
-        feature_names = np.array([f"gene_{i}" for i in range(X.shape[1])])
+    # Extraer X, y según el formato de scikit-feature
+    # Formato típico: 'X' para features, 'Y' o 'y' para labels
+    X = None
+    y = None
     
-    # Normalizar si es necesario
-    if np.max(X) > 100:
-        X = np.log2(X + 1)
+    for key in ['X', 'x']:
+        if key in mat_data:
+            X = np.asarray(mat_data[key], dtype=np.float32)
+            break
     
-    # Guardar
-    import os
-    npz_file = os.path.join(cache_dir, f"{dataset_key}.npz")
-    np.savez(npz_file, X=X, y=y, feature_names=feature_names)
-    print(f"✓ {display_name} guardado: {X.shape}")
+    for key in ['Y', 'y']:
+        if key in mat_data:
+            y_raw = np.asarray(mat_data[key], dtype=int).ravel()
+            # Convertir a binario si es necesario (1-indexado a 0-indexado)
+            if np.min(y_raw) == 1:
+                y = y_raw - 1  # Convertir [1,2] a [0,1]
+            else:
+                y = y_raw
+            break
+    
+    if X is None or y is None:
+        raise ValueError(
+            f"No se pudieron extraer X e y del archivo {mat_file}.\n"
+            f"Claves disponibles: {list(mat_data.keys())}"
+        )
+    
+    # Generar nombres de features
+    feature_names = np.array([f"gene_{i+1}" for i in range(X.shape[1])])
+    
+    # Validar dimensiones esperadas
+    expected_dims = {
+        "colon_cancer": (62, 2000),
+        "prostate_cancer": (102, 6000),
+        "lung_cancer": (181, 12000),
+    }
+    
+    if dataset_key in expected_dims:
+        expected_samples, expected_features = expected_dims[dataset_key]
+        if X.shape != (expected_samples, expected_features):
+            print(f"⚠ Warning: {dataset_key} tiene shape {X.shape}, "
+                  f"se esperaba ({expected_samples}, {expected_features})")
+    
+    return X, y, feature_names
 
 
 
@@ -284,27 +299,14 @@ def load_dataset(
     if spec.kind == "microarray":
         import os
         
-        # Load from .npz file (previously downloaded from GEO)
         cache_dir = os.path.join("data", "microarray_datasets")
         os.makedirs(cache_dir, exist_ok=True)
-        npz_file = os.path.join(cache_dir, f"{spec.openml_name}.npz")
         
-        # Si no existe, intentar descargar automáticamente
-        if not os.path.exists(npz_file):
-            print(f"Descargando {dataset} desde GEO Database...")
-            _download_microarray_dataset(dataset, spec.openml_name, cache_dir)
-        
-        data = np.load(npz_file, allow_pickle=True)
-        X = np.asarray(data['X'], dtype=np.float32)
-        y_raw = np.asarray(data['y'], dtype=int)
+        # Descargar desde scikit-feature (con caché local)
+        X, y_raw, feature_names = _download_dataset(spec.openml_name, cache_dir)
         
         # Binarize if needed
         y = _binarize_labels(y_raw, positive_label=positive_label)
-        
-        # Feature names stored in .npz
-        feature_names = np.asarray(data['feature_names'])
-        if feature_names.dtype == object:
-            feature_names = feature_names.astype(str)
         
         meta = {
             "dataset_id": dataset,
