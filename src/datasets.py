@@ -181,7 +181,7 @@ def _download_dataset(dataset_key: str, cache_dir: str) -> Tuple[np.ndarray, np.
     if dataset_key in expected_dims:
         expected_samples, expected_features = expected_dims[dataset_key]
         if X.shape != (expected_samples, expected_features):
-            print(f"⚠ Warning: {dataset_key} tiene shape {X.shape}, "
+            print(f" Warning: {dataset_key} tiene shape {X.shape}, "
                   f"se esperaba ({expected_samples}, {expected_features})")
     
     return X, y, feature_names
