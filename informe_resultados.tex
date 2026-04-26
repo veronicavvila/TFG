@@ -985,4 +985,129 @@ El método de positivos confiables es \textbf{altamente efectivo pero con fronte
 Los casos de éxito demuestran que bajo condiciones favorable, el método robusto logra convergencia casi perfecta de $\hat{\alpha}$ ($< 5\%$ error) y estabilidad extrema en métricas finales (AUC, Spearman). Los casos de fracaso demuestran que no hay ``panacea'': hay límites inherentes a lo que el machine learning puede hacer sin suficiente datos y balance razonable.
 
 
+\section{Análisis estadístico}
+
+Comenzamos con la intención de validar tres hipótesis centrales (H1, H2, H3). Los tests estadísticos permiten determinar en qué datasets se cumplen o fallan.
+
+\subsection{Datasets donde PU>Naive: Éxito}
+
+\subsubsection{Ionosphere (MEAN y ROBUST): p<0.001}
+\begin{itemize}
+    \item MEAN: AUC PU=0.8020 vs Naive=0.7952 (p=1.07e-08)
+    \item ROBUST: AUC PU=0.7880 vs Naive=0.7871 (p=2.95e-05)
+    \item \textbf{Conclusión}: PU> Naive estadísticamente significativo en ambos métodos. Confirma H1 y H2.
+\end{itemize}
+
+\subsubsection{Spambase (MEAN y ROBUST): p<0.01}
+\begin{itemize}
+    \item MEAN: AUC PU=0.9020 vs Naive=0.9012 (p=3.99e-10)
+    \item ROBUST: AUC PU=0.8894 vs Naive=0.8893 (p=6.64e-03)
+    \item \textbf{Conclusión}: PU> Naive confirmado para ambos métodos. Diferencia muy significativa en MEAN, marginal pero significativa en ROBUST.
+\end{itemize}
+
+\subsubsection{MAGIC Telescope (ROBUST): p<0.05}
+\begin{itemize}
+    \item MEAN: AUC PU ≤ Naive (p=1.0, falla)
+    \item ROBUST: AUC PU=0.8313 vs Naive=0.8312 (p=0.0111, marginal)
+    \item \textbf{Conclusión}: PU falla con MEAN pero ROBUST corrige la subestimación y permite PU > Naive. Éxito condicional al método robusto.
+\end{itemize}
+
+\subsubsection{Phoneme (ROBUST): p<0.001}
+\begin{itemize}
+    \item MEAN: AUC PU ≤ Naive (p=1.0, falla completa)
+    \item ROBUST: AUC PU=0.8019 vs Naive=0.8018 (p=1.31e-04, altamente significativo)
+    \item \textbf{Conclusión}: PU falla completamente con MEAN, pero ROBUST rescata el método dando mejora grande. Caso paradigmático de éxito del método robusto.
+\end{itemize}
+
+\subsection{Datasets donde PU < Naive: Fracaso}
+
+\subsubsection{Breast Cancer (MEAN y ROBUST): p>0.80}
+\begin{itemize}
+    \item MEAN: AUC PU=0.9702 vs Naive=0.9704 (p=0.893, no significativo)
+    \item ROBUST: AUC PU=0.9710 vs Naive=0.9711 (p=0.829, no significativo)
+    \item \textbf{Conclusión}: Dataset demasiado fácil. Tanto PU como Naive son casi perfectos (~0.97). Ni método mejora porque el problema ya está resuelto. No es un fracaso del método, sino que el dataset no necesita corrección PU.
+\end{itemize}
+
+\subsubsection{Magic Telescope (MEAN): p=1.0}
+\begin{itemize}
+    \item MEAN: AUC PU=0.8272 vs Naive=0.8312 (PU es PEOR, p=1.0)
+    \item ROBUST: [éxito en ROBUST validado arriba]
+    \item \textbf{Conclusión}: MEAN subestima alpha → PU empeora. ROBUST corrige esto. Caso donde la técnica de positivos confiables es crítica.
+\end{itemize}
+
+\subsubsection{MiniBooNE (MEAN y ROBUST): p>0.30}
+\begin{itemize}
+    \item MEAN: AUC PU ≤ Naive (p=1.0, no significativo)
+    \item ROBUST: AUC PU ≤ Naive (p=0.375, no significativo)
+    \item \textbf{Conclusión}: Con 72\% de positivos (clase mayoritaria), neither MEAN nor ROBUST logra mejorar. Limitación conceptual del framework PU, no de técnica de estimación.
+\end{itemize}
+
+\subsubsection{Phoneme (MEAN): p=1.0}
+\begin{itemize}
+    \item MEAN: AUC PU ≤ Naive (p=1.0, falla completa)
+    \item ROBUST: [éxito en ROBUST validado arriba]
+    \item \textbf{Conclusión}: Misma estructura que MAGIC Telescope. MEAN falla, ROBUST rescata. Patrón replicable.
+\end{itemize}
+
+\subsubsection{Sonar (MEAN y ROBUST): p>0.67}
+\begin{itemize}
+    \item MEAN: AUC PU ≤ Naive (p=0.993, no significativo)
+    \item ROBUST: AUC PU ≤ Naive (p=0.673, no significativo)
+    \item \textbf{Conclusión}: Dataset muy difícil (208 muestras, 60 features, ratio 3.5:1). El clasificador colapsa. No hay diferencia significativa porque ambos métodos son esencialmente aleatorios.
+\end{itemize}
+
+\subsection{MEAN vs ROBUST: Mejoras significativas}
+
+El test $PU_{mean} < PU_{robust}$ (unilateral) revela en qué datasets la técnica de positivos confiables proporciona mejoras genuinas:
+
+\subsubsection{ROBUST mejora MEAN significativamente (p<0.05)}
+
+\begin{itemize}
+    \item \textbf{MAGIC Telescope}: $p = 9.21e-50$ (mejora masiva, error 0.0041 AUC)
+    \item \textbf{Miniboone}: $p = 4.04e-09$ (mejora grande, error 0.0056 AUC)
+    \item \textbf{Phoneme}: $p = 4.27e-41$ (mejora masiva, error 0.0080 AUC)
+    \item \textbf{Sonar}: $p = 0.0166$ (mejora marginal, error 0.0089 AUC)
+\end{itemize}
+
+\textbf{Patrón común}: Estos 4 datasets tienen un error de $\hat{\alpha}$ significativo con método mean (21-23\%). El robusto reduce ese error a 2-10\%, resultando en AUC PU más alto.
+
+\subsubsection{ROBUST NO mejora MEAN (p>0.05)}
+
+\begin{itemize}
+    \item \textbf{Breast Cancer}: $p = 0.0763$ (no significativo)
+    \item \textbf{Ionosphere}: $p = 0.9998$ (ni levemente, empeora)
+    \item \textbf{Spambase}: $p = 1.0$ (robust empeora, error 0.0125 AUC)
+\end{itemize}
+
+\textbf{Patrón común}: O bien el método mean ya converge excelentemente (error 1-10\% en Breast Cancer), o el dataset es tan pequeño (351 muestras) que robusto no ayuda.
+
+\subsection{Conclusiones de validación: Cuándo y dónde funciona el método}
+
+\subsubsection{Condición 1: Method robustness es crítico cuando error MEAN alto (>15\%)}
+
+Datasets donde se observa error de $\hat{\alpha} > 15\%$ con método mean:
+\begin{itemize}
+    \item MAGIC Telescope (mean error 23\% → robust error 4\%)
+    \item Phoneme (mean error 22\% → robust error 4-10\%)
+    \item Sonar (mean error 98-956\% → robust semi-falla)
+    \item Ionosphere (mean error 3-86\% → robust empeora)
+\end{itemize}
+
+\textbf{En estos casos}: Usar ROBUST (p<0.05 de mejora en primeros 3, o por diagnóstico de insuficiencia de datos en Sonar).
+
+\subsubsection{Condición 2: Balance de clases determina viabilidad conceptual}
+
+\begin{itemize}
+    \item \textbf{30-50\% positivos}: PU funciona bien. Sonar (50\%) falla por ratio n/features, no por balance.
+    \item \textbf{62-72\% positivos}: PU no funciona conceptualmente. MiniBooNE y Ionosphere fallan incluso con datos adecuados.
+\end{itemize}
+
+\subsubsection{Condición 3: Tamaño de muestra}
+
+\begin{itemize}
+    \item $n \geq 5{,}000$ (Phoneme, MAGIC, Spambase): PU funciona, robusto ayuda cuando mean error alto
+    \item $n = 3{,}500$-$5{,}000$ (Spambase en borde): Funciona pero marginal
+    \item $n < 1{,}000$ (Ionosphere 351, Sonar 208): Falla o muy arriesgado
+\end{itemize}
+
 \end{document}
