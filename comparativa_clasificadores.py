@@ -22,7 +22,6 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import StratifiedKFold
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import roc_auc_score, accuracy_score, precision_score, recall_score
-from scipy.stats import ttest_rel
 import matplotlib.pyplot as plt
 import seaborn as sns
 import mlflow
@@ -32,16 +31,17 @@ import mlflow.sklearn
 from src.config_clasificador import (
     DATASET, N_SEEDS, ALPHAS, N_KFOLDS, NOISE_LEVEL,
     ALPHA_ESTIMATION_METHOD, ALPHA_TOP_Q_PERCENT,
-    EXPERIMENT_NAME, RUN_NAME
+    EXPERIMENT_NAME, RUN_NAME, TOP_K, USE_FEATURE_SELECTION
 )
 from src.datasets import load_dataset
 from src.data_utiles import generar_etiquetas_pu, añadir_ruido_gaussiano
 from src.pu_model import entrenar_clasificador_pu, estimar_alpha, estimar_alpha_robusto, obtener_scores
+from src.evaluacion import calcular_mi_real, calcular_mi_naive
 
 
 def crear_directorio_salida():
     """Crear directorio para guardar artefactos locales."""
-    output_dir = Path("resultados_comparativa") / DATASET
+    output_dir = Path("resultados_comparativa") / DATASET / ALPHA_ESTIMATION_METHOD
     output_dir.mkdir(parents=True, exist_ok=True)
     return output_dir
 
@@ -129,19 +129,38 @@ def crear_visualizaciones(df_resultados, df_resumen, output_dir):
     return boxplot_path, barplot_path
 
 
-def entrenar_y_evaluar_modelos(X_train, X_test, y_train, y_test, S_train, S_test, seed):
+def entrenar_y_evaluar_modelos(X_train, X_test, y_train, y_test, S_train, S_test, p_y_train, seed):
     """
-    Entrena 3 modelos y retorna métricas.
+    Entrena 3 modelos y retorna métricas con selección de top-K features.
     
     Args:
         X_train, X_test: features (ya preprocessadas)
         y_train, y_test: etiquetas verdaderas (0/1)
         S_train, S_test: etiquetas PU (P=1, U=-1)
+        p_y_train: probabilidades estimadas para entrenamiento PU
         seed: para reproducibilidad
     
     Returns:
         dict con métricas: auc, acc, prec, rec para cada modelo
     """
+    
+    from src.mi_utiles import calcular_mi_ranking
+    
+    # Seleccionar features basado en MI ranking PU si está habilitado
+    if USE_FEATURE_SELECTION:
+        # Calcular MI ranking usando el modelo PU
+        mi_scores, ranking_pu = calcular_mi_ranking(
+            X_train, p_y_train, metodo="regresion", random_state=seed
+        )
+        
+        # Seleccionar top K features del ranking PU
+        selected_features = ranking_pu[:TOP_K]
+        
+        X_train_sel = X_train[:, selected_features]
+        X_test_sel = X_test[:, selected_features]
+    else:
+        X_train_sel = X_train
+        X_test_sel = X_test
     
     metricas = {}
     
@@ -152,10 +171,10 @@ def entrenar_y_evaluar_modelos(X_train, X_test, y_train, y_test, S_train, S_test
         class_weight=None,
         random_state=seed
     )
-    modelo_real.fit(X_train, y_train)
+    modelo_real.fit(X_train_sel, y_train)
     
-    proba_real = modelo_real.predict_proba(X_test)[:, 1]
-    pred_real = modelo_real.predict(X_test)
+    proba_real = modelo_real.predict_proba(X_test_sel)[:, 1]
+    pred_real = modelo_real.predict(X_test_sel)
     
     metricas['real'] = {
         'auc': roc_auc_score(y_test, proba_real),
@@ -174,10 +193,10 @@ def entrenar_y_evaluar_modelos(X_train, X_test, y_train, y_test, S_train, S_test
         class_weight=None,
         random_state=seed
     )
-    modelo_naive.fit(X_train, S_train_naive)
+    modelo_naive.fit(X_train_sel, S_train_naive)
     
-    proba_naive = modelo_naive.predict_proba(X_test)[:, 1]
-    pred_naive = modelo_naive.predict(X_test)
+    proba_naive = modelo_naive.predict_proba(X_test_sel)[:, 1]
+    pred_naive = modelo_naive.predict(X_test_sel)
     
     metricas['naive'] = {
         'auc': roc_auc_score(y_test, proba_naive),
@@ -187,10 +206,10 @@ def entrenar_y_evaluar_modelos(X_train, X_test, y_train, y_test, S_train, S_test
     }
     
     # 3. MODELO PU CORREGIDO (Estimación de alpha según configuración)
-    modelo_pu = entrenar_clasificador_pu(X_train, S_train, random_state=seed)
+    modelo_pu = entrenar_clasificador_pu(X_train_sel, S_train, random_state=seed)
     
     # Estimar alpha (mean o robust según configuración)
-    scores_train = obtener_scores(modelo_pu, X_train)
+    scores_train = obtener_scores(modelo_pu, X_train_sel)
     if ALPHA_ESTIMATION_METHOD == 'robust':
         alpha_hat = estimar_alpha_robusto(scores_train, S_train, 
                                          top_q_percent=ALPHA_TOP_Q_PERCENT)
@@ -198,7 +217,7 @@ def entrenar_y_evaluar_modelos(X_train, X_test, y_train, y_test, S_train, S_test
         alpha_hat = estimar_alpha(scores_train, S_train)
     
     # Corregir probabilidades en test
-    scores_test = obtener_scores(modelo_pu, X_test)
+    scores_test = obtener_scores(modelo_pu, X_test_sel)
     proba_pu = np.clip(scores_test / alpha_hat, 0, 1)
     pred_pu = (proba_pu > 0.5).astype(int)
     
@@ -252,6 +271,9 @@ def ejecutar_experimento():
         if ALPHA_ESTIMATION_METHOD == 'robust':
             mlflow.log_param("top_q_percent", ALPHA_TOP_Q_PERCENT)
         mlflow.log_param("noise_level", NOISE_LEVEL)
+        mlflow.log_param("use_feature_selection", USE_FEATURE_SELECTION)
+        if USE_FEATURE_SELECTION:
+            mlflow.log_param("top_k_features", TOP_K)
         
         
         for seed in N_SEEDS:
@@ -260,6 +282,20 @@ def ejecutar_experimento():
                 # Generar etiquetas PU
                 S = generar_etiquetas_pu(y, alpha, random_state=seed)
                 X_noisy = añadir_ruido_gaussiano(X, NOISE_LEVEL, random_state=seed)
+                
+                # Entrenar modelo PU inicial para estimar alpha (usado en feature selection)
+                modelo_pu_init = entrenar_clasificador_pu(X_noisy, S, random_state=seed)
+                scores_init = obtener_scores(modelo_pu_init, X_noisy)
+                
+                if ALPHA_ESTIMATION_METHOD == 'robust':
+                    alpha_hat_init = estimar_alpha_robusto(scores_init, S, 
+                                                          top_q_percent=ALPHA_TOP_Q_PERCENT)
+                else:
+                    alpha_hat_init = estimar_alpha(scores_init, S)
+                
+                # Estimar probabilidades reales (para MI ranking)
+                from src.pu_model import estimar_probabilidad_real
+                p_y_full = estimar_probabilidad_real(scores_init, alpha_hat_init)
                 
                 # K-Fold
                 kfold = StratifiedKFold(n_splits=N_KFOLDS, shuffle=True, 
@@ -270,11 +306,12 @@ def ejecutar_experimento():
                     X_train, X_test = X_noisy[train_idx], X_noisy[test_idx]
                     y_train, y_test = y[train_idx], y[test_idx]
                     S_train, S_test = S[train_idx], S[test_idx]
+                    p_y_train = p_y_full[train_idx]
                     
                     # Entrenar y evaluar
                     metricas = entrenar_y_evaluar_modelos(
                         X_train, X_test, y_train, y_test, 
-                        S_train, S_test, seed
+                        S_train, S_test, p_y_train, seed
                     )
                     
                     # Guardar resultado
@@ -337,79 +374,11 @@ def ejecutar_experimento():
             for _, row in subset.iterrows():
                 print(f"  {row['metrica']:4s}: {row['media']:.4f} ± {row['std']:.4f}")
         
-        # Tests pareados AUC (principal métrica)
-        print(f"\n\n{'='*70}")
-        print("TESTS ESTADÍSTICOS (AUC - Paired t-test):")
-        print(f"{'='*70}\n")
-        
+        # Log métricas resumen en MLflow
         auc_real = df_resultados['real_auc'].values
         auc_pu = df_resultados['pu_auc'].values
         auc_naive = df_resultados['naive_auc'].values
         
-        tests_stats = []
-        
-        # Real vs PU
-        t_stat, p_val = ttest_rel(auc_real, auc_pu)
-        tests_stats.append({
-            'dataset': DATASET,
-            'comparison': 'Real = PU',
-            'media_real': auc_real.mean(),
-            'media_pu': auc_pu.mean(),
-            'diferencia': auc_real.mean() - auc_pu.mean(),
-            't_statistic': t_stat,
-            'p_value': p_val,
-        })
-        
-        print(f"Comparación: Real = PU")
-        print(f"Real: {auc_real.mean():.4f} ± {auc_real.std():.4f}")
-        print(f"PU:   {auc_pu.mean():.4f} ± {auc_pu.std():.4f}")
-        print(f"Diferencia: {auc_real.mean() - auc_pu.mean():.4f}")
-        print(f"t-statistic: {t_stat:.4f}, p-value: {p_val:.4f}\n")
-
-
-        # PU vs Naive
-        t_stat, p_val = ttest_rel(auc_pu, auc_naive)
-        tests_stats.append({
-            'dataset': DATASET,
-            'comparison': 'PU = Naive',
-            'media_pu': auc_pu.mean(),
-            'media_naive': auc_naive.mean(),
-            'diferencia': auc_pu.mean() - auc_naive.mean(),
-            't_statistic': t_stat,
-            'p_value': p_val,
-        })
-        
-        print(f"Comparación: PU = Naive")
-        print(f"PU: {auc_pu.mean():.4f} ± {auc_pu.std():.4f}")
-        print(f"Naive: {auc_naive.mean():.4f} ± {auc_naive.std():.4f}")
-        print(f"Diferencia: {auc_pu.mean() - auc_naive.mean():.4f}")
-        print(f"t-statistic: {t_stat:.4f}, p-value: {p_val:.4f}\n")
-        
-        # PU > Naive (unilateral)
-        t_stat, p_val = ttest_rel(auc_pu, auc_naive, alternative='greater')
-        tests_stats.append({
-            'dataset': DATASET,
-            'comparison': 'PU > Naive',
-            'media_pu': auc_pu.mean(),
-            'media_naive': auc_naive.mean(),
-            'diferencia': auc_pu.mean() - auc_naive.mean(),
-            't_statistic': t_stat,
-            'p_value': p_val,
-        })
-        
-        print(f"Comparación: PU > Naive (H0 = PU < Naive)")
-        print(f"PU: {auc_pu.mean():.4f} ± {auc_pu.std():.4f}")
-        print(f"Naive: {auc_naive.mean():.4f} ± {auc_naive.std():.4f}")
-        print(f"Diferencia: {auc_pu.mean() - auc_naive.mean():.4f}")
-        print(f"t-statistic: {t_stat:.4f}, p-value: {p_val:.4f}\n")
-
-
-        df_tests = pd.DataFrame(tests_stats)
-        tests_path = output_dir / f"tests_estadisticos_{DATASET}.csv"
-        df_tests.to_csv(tests_path, index=False)
-        mlflow.log_artifact(str(tests_path))
-        
-        # Log métricas resumen en MLflow
         mlflow.log_metric("auc_real_mean", auc_real.mean())
         mlflow.log_metric("auc_pu_mean", auc_pu.mean())
         mlflow.log_metric("auc_naive_mean", auc_naive.mean())

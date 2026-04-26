@@ -156,3 +156,4 @@ mlflow.log
 mlartifacts/
 
 resultados/
+resultados_comparativa/
