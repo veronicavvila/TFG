@@ -90,6 +90,19 @@ _DATASETS: Dict[str, DatasetSpec] = {
         positive_label=1,
         description="Lung Cancer (Bhattacharjee et al. 2001) - ~181 samples, ~12000 genes (Adenocarcinoma vs Others)",
     ),
+    # Raw microarray MAT files
+    "cns": DatasetSpec(
+        kind="mat",
+        openml_name="CNS_microarray",
+        positive_label=1,
+        description="CNS Microarray - 60 samples, 7130 genes (Tumor classification)",
+    ),
+    "dlbcl": DatasetSpec(
+        kind="mat",
+        openml_name="DLBCL_microarray",
+        positive_label=1,
+        description="DLBCL Microarray - 47 samples, 4027 genes (Lymphoma subtype classification)",
+    ),
 }
 
 
@@ -313,6 +326,50 @@ def load_dataset(
             "kind": spec.kind,
             "description": spec.description,
             "positive_label": positive_label,
+        }
+        return X, y, feature_names, meta
+
+    if spec.kind == "mat":
+        import os
+        from scipy.io import loadmat
+        
+        cache_dir = os.path.join("data", "microarray_datasets")
+        mat_file = os.path.join(cache_dir, f"{spec.openml_name}.mat")
+        
+        if not os.path.exists(mat_file):
+            raise FileNotFoundError(f"MAT file not found: {mat_file}")
+        
+        # Load MATLAB file
+        mat_data = loadmat(mat_file)
+        
+        # Extract data matrix (should be 'data' key for CNS/DLBCL)
+        if 'data' not in mat_data:
+            raise ValueError(
+                f"No 'data' key in {mat_file}. Available keys: {[k for k in mat_data.keys() if not k.startswith('__')]}"
+            )
+        
+        data = np.asarray(mat_data['data'], dtype=np.float32)
+        
+        # Last column contains class labels (1 or 2)
+        # Features = all columns except last
+        X = data[:, :-1]
+        y_raw = data[:, -1].astype(int)
+        
+        # Convert labels from {1,2} to {0,1}
+        y = (y_raw == positive_label).astype(int) if positive_label in (1, 2) else y_raw - 1
+        
+        # Generate feature names
+        feature_names = np.array([f"gene_{i+1}" for i in range(X.shape[1])])
+        
+        print(f"  Loaded {spec.openml_name}: X shape {X.shape}, y shape {y.shape}")
+        print(f"  Class distribution: {np.bincount(y)}")
+        
+        meta = {
+            "dataset_id": dataset,
+            "kind": spec.kind,
+            "description": spec.description,
+            "positive_label": positive_label,
+            "label_mapping": f"{{2->0, {positive_label}->1}}",
         }
         return X, y, feature_names, meta
 

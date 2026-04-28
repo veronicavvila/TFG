@@ -183,20 +183,31 @@ def entrenar_y_evaluar_modelos(X_train, X_test, y_train, y_test, S_train, S_test
         'rec': recall_score(y_test, pred_real, zero_division=0),
     }
     
-    # 2. MODELO NAIVE (Asume U como negativos) 
+    # 2. MODELO NAIVE (Asume U como negativos)
     S_train_naive = S_train.copy()
     S_train_naive[S_train_naive == -1] = 0  # Unlabeled = Negative
     
-    modelo_naive = LogisticRegression(
-        max_iter=500,
-        solver='lbfgs',
-        class_weight=None,
-        random_state=seed
-    )
-    modelo_naive.fit(X_train_sel, S_train_naive)
+    # Verificar si hay ambas clases (importante para datasets pequeños)
+    unique_classes = np.unique(S_train_naive)
     
-    proba_naive = modelo_naive.predict_proba(X_test_sel)[:, 1]
-    pred_naive = modelo_naive.predict(X_test_sel)
+    if len(unique_classes) == 1:
+        # Si solo hay una clase, usar predicción basada en proporción de clases en test
+        # Este caso ocurre en datasets pequeños donde un fold puede no tener positivos etiquetados
+        class_prop = np.mean(y_test)  # Proporción de positivos en test
+        proba_naive = np.full(len(y_test), class_prop)
+        pred_naive = (proba_naive > 0.5).astype(int)
+    else:
+        # Entrenamiento normal si hay ambas clases
+        modelo_naive = LogisticRegression(
+            max_iter=500,
+            solver='lbfgs',
+            class_weight=None,
+            random_state=seed
+        )
+        modelo_naive.fit(X_train_sel, S_train_naive)
+        
+        proba_naive = modelo_naive.predict_proba(X_test_sel)[:, 1]
+        pred_naive = modelo_naive.predict(X_test_sel)
     
     metricas['naive'] = {
         'auc': roc_auc_score(y_test, proba_naive),
