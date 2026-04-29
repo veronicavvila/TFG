@@ -5,7 +5,7 @@
 #   - Libsvm: gas_sensor_drift
 #   - Microarray (descargados): colon_cancer, prostate_cancer, lung_cancer
 #   - Microarray (locales .mat): cns, dlbcl
-DATASET = "dlbcl"  
+DATASET = "cns"  
 VALID_DATASETS = [
     'breast_cancer', 'ionosphere', 'sonar', 'gas_sensor_drift', 'miniboone', 
     'spambase', 'magic_telescope', 'phoneme',
@@ -27,9 +27,9 @@ USE_FEATURE_SELECTION = True  # Usar selección de features basada en MI
 # Cambiar entre 'robust' o 'mean':
 #   - 'robust': usa estimar_alpha_robusto con top_q_percent=30
 #   - 'mean': usa media simple de scores de positivos etiquetados
-ALPHA_ESTIMATION_METHOD = 'robust'  
+ALPHA_ESTIMATION_METHOD = 'mean'  
 ALPHA_TOP_Q_PERCENT = 30  # percentil superior a considerar en método robusto
 
 # Mlflow
 EXPERIMENT_NAME = DATASET
-RUN_NAME = "robust comparativa_clasificadores corregido"
+RUN_NAME = "mean comparativa_clasificadores sin dummy"
