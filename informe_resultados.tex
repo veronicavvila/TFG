@@ -17,9 +17,6 @@
 
 \geometry{margin=2.5cm}
 
-\newcommand{\yes}{\textcolor{green!60!black}{$\checkmark$}}
-\newcommand{\no}{\textcolor{red}{$\times$}}
-\newcommand{\meh}{\textcolor{orange}{$\sim$}}
 
 \title{\textbf{Resultados sobre datasets: selección de features en escenarios PU}}
 \author{Verónica Vila Vivero}
@@ -506,40 +503,15 @@ $\alpha$ real & $\hat{\alpha}$ (media) & Error (media) & $\hat{\alpha}$ (robusto
 MiniBooNE muesta una limitación del método porque asume una prevalencia de clases moderada. Con muchos más positivos, ni el naive falla ni $\hat{\alpha}$ converge bien.
 \subsubsection{Método robusto: positivos confiables}
 
-Se evaluó la estimación robusta de $\alpha$ en MiniBooNE variando el percentil desde 5\% hasta 100\% (con $\alpha_{\text{true}}=0.2$). Los resultados muestran un patrón que refleja la limitación fundamental del dataset: aunque el método robusto logra \textbf{mejorar significativamente la estimación de $\hat{\alpha}$ con percentiles moderados}, el impacto en métricas finales es \textbf{nulo} debido al desbalance de clases.
-
-\paragraph{Estimación de $\alpha$:} El método robusto logra convergencia moderada en rango medio:
-\begin{itemize}
-    \item Top 5\%: $\hat{\alpha} \approx 0.342$ (error $\approx 71\%$) — sobrestimación severa
-    \item Top 20\%: $\hat{\alpha} \approx 0.240$ (error $\approx 20\%$) — mejora significativa
-    \item Top 30\%: $\hat{\alpha} \approx 0.212$ (error $\approx 6\%$) — casi perfecto
-    \item Top 50\%: $\hat{\alpha} \approx 0.176$ (error $\approx 12\%$)
-    \item Top 100\%: $\hat{\alpha} \approx 0.121$ (error $\approx 40\%$) — subestimación creciente
-\end{itemize}
-
-La convergencia es excelente en top 30\% (error apenas 6\%), demostrando que el método robusto \textbf{funciona correctamente a nivel técnico} en MiniBooNE.
-
-\paragraph{Impacto en métricas finales --- Invariabilidad por saturación:} Contraintuitivamente, AUC se mantiene prácticamente constante:
+El método robusto de estimación de $\alpha$ (top 20\% de scores) produce un comportamiento \textbf{fuertemente dependiente de $\alpha$} en MiniBooNE:
 
 \begin{itemize}
-    \item \textbf{AUC}: invariable a $0.9054$--$0.9061$ en toda la variación (desviación $< 0.005$)
-    \item \textbf{Spearman}: extremadamente bajo $[0.0, 0.05]$, reflejando confusión total en el ranking
-    \item \textbf{Ranking}: inestable incluso con $\hat{\alpha}$ casi perfecto (error 6\%)
+    \item A valores \textbf{altos de $\alpha$}: la robustez mejora significativamente. Para $\alpha=0.5$: error se reduce de 36\% a 28\%, una mejora de 8 puntos.
+    \item A valores \textbf{bajos de $\alpha$}: la robustez empeora dramáticamente. Para $\alpha=0.05$: error aumenta de 42\% a 190\%, una degradación severa que refleja sobreestimación extrema.
+    \item El patrón sugiere que el método robusto introduce \textbf{sesgo de sobreestimación} en MiniBooNE, especialmente problemático en el régimen de baja $\alpha$ donde los positivos etiquetados son escasos.
 \end{itemize}
 
-\paragraph{Conclusión --- Limitación estructural no resuelta por robustez:} MiniBooNE demuestra un resultado crucial: \textbf{incluso estimaciones casi perfectas de $\hat{\alpha}$ no pueden rescatar un método PU cuando hay desbalance severo de clases}:
-
-\begin{enumerate}
-    \item \textbf{Éxito técnico, fracaso práctico}: El método robusto logra $\hat{\alpha} \approx 0.212$ (error 6\%) a top 30\%, que es excelente. Sin embargo, esto no transforma el Spearman porque el problema no es la precisión de $\alpha$.
-    
-    \item \textbf{Problema de fondo}: MiniBooNE tiene 72\% de positivos (clase mayoritaria). Con esta prevalencia, incluso con todos los positivos correctamente identificados, los ejemplos etiquetados en $S$ (subset aleatorio de positivos) representan casi toda la distribución de ambas clases. El método corrector PU intenta ``deshacer'' una confusión que no existe realmente: hay tan pocas muestras negativas genuinas en el unlabeled que no hay degradación to correct.
-    
-    \item \textbf{Ranking naive ya es óptimo}: El método naive alcanza Spearman muy alto porque tiene suficiente información de la clase positiva mayoritaria. La corrección PU no mejora esto; en fact, puede introducir ruido al intentar ajustar una $\hat{\alpha}$ en un regime donde los negativos son marginales.
-    
-    \item \textbf{No es mérito del método robusto}: La convergencia de $\hat{\alpha}$ es incidental. Con balance diferente (35--65\% positivos), la misma estimación de $\hat{\alpha}$ sería transformadora. Aquí, los datos de MiniBooNE simplemente violan los supuestos del marco PU.
-\end{enumerate}
-
-En resumen, MiniBooNE ejemplifica que \textbf{el método robusto no puede compensar desbalance clase extremo}. Es un diagnóstico científico valuioso: demuestra los límites absolutos del framework PU. La recomendación es detectar este patrón (clase mayoritaria $> 65\%$) \textbf{antes} de intentar PU, y reconocer que no es un problema solucionable con mejores estimadores de $\alpha$.
+El ranking naive permanece robusto ($0.97$--$0.99$) y superior al PU en ambos métodos de estimación de $\alpha$. Con clase positiva mayoritaria (72\%), aunque el método robusto logra mejorar $\hat{\alpha}$ a valores altos de $\alpha$, la mejora no se traduce en mejor ranking PU. MiniBooNE demuestra que el desbalance de clases mayoría mayoritaria crea un escenario donde incluso estimaciones ``correctas'' de $\alpha$ no pueden mejorar el PU: no es el estimador el problema fundamental, sino la asimetría de clases que hace que el naive sea ya óptimo.
 % ===================== SPAMBASE =====================
 \section{Spambase}
 
@@ -759,7 +731,7 @@ Se evaluó la estimación robusta de $\alpha$ en Phoneme variando el percentil d
 
 El error permanece bajo en todo el rango $[1\%, 16\%]$, con el óptimo en top 30\% (error apenas 1\%), demostrando que los positivos con scores moderadamente altos en Phoneme son extremadamente representativos de la proporción real $\alpha$.
 
-\paragraph{Impacto en métricas finales --- Estabilización completa:} El método robusto produce estabilidad ejemplar:
+\paragraph{Impacto en métricas finale:} El método robusto produce estabilidad ejemplar:
 
 \begin{itemize}
     \item \textbf{AUC}: completamente invariable a $0.8100$ en todas las variaciones de percentil (desviación $< 0.0001$)
@@ -767,7 +739,7 @@ El error permanece bajo en todo el rango $[1\%, 16\%]$, con el óptimo en top 30
     \item \textbf{Top-10 features}: idénticas independientemente del percentil
 \end{itemize}
 
-\paragraph{Conclusión --- Caso de éxito paradigmático:} Phoneme es el ejemplo \textbf{donde el método robusto de positivos confiables funciona de manera excepcional}:
+\paragraph{Conclusión:} Phoneme es el ejemplo \textbf{donde el método robusto de positivos confiables funciona de manera excepcional}:
 
 \begin{enumerate}
     \item \textbf{Convergencia casi perfecta}: Error máximo de 16\% a top 5\% y apenas 1\% a top 30\%. Es el mejor desempeño observado en todos los datasets evaluados.
@@ -782,14 +754,24 @@ El error permanece bajo en todo el rango $[1\%, 16\%]$, con el óptimo en top 30
     \item \textbf{Percentil óptimo}: Top 20-30\% logra convergencia prácticamente perfecta ($< 5\%$ error). En la práctica, usar $\alpha_{\text{top-30}}$ garantiza excelente estimación.
 \end{enumerate}
 
-En resumen, Phoneme demuestra que **bajo las condiciones correctas, el método robusto es casi perfecto**. Su recomendación explícita es usar este dataset como referencia de implementación y como prueba de concepto para aplicaciones nuevas. Es el caso donde todos los supuestos del método se cumplen idealmente, resultando en robustez tanto de $\hat{\alpha}$ como del ranking final.
+En resumen, Phoneme demuestra que bajo las condiciones correctas, el método robusto es casi perfecto. Su recomendación explícita es usar este dataset como referencia de implementación y como prueba de concepto para aplicaciones nuevas. Es el caso donde todos los supuestos del método se cumplen idealmente, resultando en robustez tanto de $\hat{\alpha}$ como del ranking final.
 
 % ===================== RESUMEN =====================
 \section{Resumen general}
 
+De los resultados se obtienen las siguientes conclusiones generales:
+
+\begin{itemize}
+    \item El método funciona bien en datasets con \textbf{tamaño de muestra moderado-grande}, \textbf{balance de clases razonable} y \textbf{features informativas pero no trivialmente discriminativas} (Breast Cancer, Spambase, MAGIC Telescope).
+    \item El método falla cuando: (a) hay muy pocas muestras relativas a las features (Sonar) y (b) la clase positiva es muy mayoritaria haciendo que el naive ya funcione bien y que $\hat{\alpha}$ se subestime (MiniBooNE).
+    \item La estimación de $\hat{\alpha}$ es la parte más sensible del pipeline. Cuando falla (Sonar, MiniBooNE), arrastra al resto del método.
+    
+\end{itemize}
+
+\subsection{Conclusión sobre el método de positivos confiables}
 \subsection{Matriz de resultados}
 
-Se evaluaron 8 datasets con el objetivo de entender cuándo el método PU funciona y cuándo falla. Los resultados se organizan en tres categorías basadas en el desempeño observado:
+Se evaluaron 8 datasets con el objetivo de entender cuándo el método PU funciona y cuándo falla. Los resultados se organizan en tres categorías:
 
 \begin{table}[H]
 \centering
@@ -800,17 +782,17 @@ Se evaluaron 8 datasets con el objetivo de entender cuándo el método PU funcio
 \textbf{Categoría} & \textbf{Dataset} & \textbf{Balance} & \textbf{$n$ muestras} & \textbf{$n$/features} & \textbf{Desempeño} \\
 \midrule
 \multirow{3}{*}{\textbf{ÉXITO}} 
-& Phoneme & 50\% & 5{,}404 & 1{,}081 & Excelente \\
-& MAGIC Telescope & 35\% & 19{,}020 & 1{,}902 & Excelente \\
+& Phoneme & 50\% & 5{,}404 & 5 & Excelente \\
+& MAGIC Telescope & 35\% & 19{,}020 & 10 & Excelente \\
+\midrule
+\textbf{INTERMEDIO} & Spambase & 39\% & 4{,}601 & 57 & Aplicable con cuidado \\
 & Breast Cancer & 37\% & 569 & 19 & Robusto a errores \\
 \midrule
-\textbf{INTERMEDIO} & Spambase & 39\% & 4{,}601 & 81 & Aplicable con cuidado \\
-\midrule
 \multirow{4}{*}{\textbf{FRACASO}} 
-& Ionosphere & 64\% & 351 & 10 & Inaplicable \\
-& Sonar & 50\% & 208 & 3.5 & Estructuralmente inaplicable \\
-& MiniBooNE & 72\% & 130{,}065 & 2{,}601 & Limitación conceptual \\
-& Gas Sensor & Multiclase & 13{,}910 & 109 & Violación de supuestos \\
+& Ionosphere & 64\% & 351 & 34 & Inaplicable \\
+& Sonar & 50\% & 208 & 60 & Estructuralmente inaplicable \\
+& MiniBooNE & 72\% & 130{,}065 & 50 & Limitación conceptual \\
+& Gas Sensor & Multiclase & 13{,}910 & 128 & Violación de supuestos \\
 \bottomrule
 \end{tabular}
 }
@@ -822,7 +804,7 @@ Se evaluaron 8 datasets con el objetivo de entender cuándo el método PU funcio
 
 \textbf{Características comunes:}
 \begin{enumerate}
-    \item \textbf{Balance de clases moderado}: Ambos datasets tienen positivos entre 35-50\%. Esta prevalencia es óptima porque:
+    \item \textbf{Balance de clases moderado}: Ambos datasets tienen positivos entre 35-50\%:
     \begin{itemize}
         \item Hay suficientes positivos etiquetados para que el clasificador PU aprenda
         \item Hay suficientes negativos genuinos que se confunden y causan degradación observable
@@ -836,7 +818,7 @@ Se evaluaron 8 datasets con el objetivo de entender cuándo el método PU funcio
         \item Garantiza suficiente variabilidad estadística para estimar $\hat{\alpha}$ con precisión
     \end{itemize}
     
-    \item \textbf{Features moderadamente discriminativas}: No triviales, pero no imposiblemente difíciles
+    \item \textbf{Features moderadamente discriminativas}: No triviales, pero no demasiado difíciles
     \begin{itemize}
         \item Phoneme: 5 features acústicas, correlación moderada
         \item MAGIC Telescope: 10 features astronómicas bien seleccionadas
@@ -875,6 +857,7 @@ Los cuatro casos de fracaso comparten patrones distintos pero igualmente problem
 
 \paragraph{1. Ionosphere y Sonar: Insuficiencia de datos}
 
+
 \textbf{Ionosphere:}
 \begin{itemize}
     \item Balance: 64\% positivos (muy sesgo hacia positivos)
@@ -887,18 +870,20 @@ Los cuatro casos de fracaso comparten patrones distintos pero igualmente problem
 \begin{itemize}
     \item Balance: 50\% (aparentemente ideal)
     \item N: 208 muestras, features: 60 → ratio 3.5:1 (CRÍTICO)
-    \item Problema: Más features que muestras × 10
+    \item Problema: Muchas features por muestra
     \item Resultado: Error 165\% incluso con top 100\%, todo el pipeline colapsa
 \end{itemize}
 
 \textbf{Diagnóstico común}: El clasificador logístico no puede aprender. Los scores $P(S=1 \mid x)$ son esencialmente aleatorios. El método robusto amplifica este ruido en lugar de mejorarlo.
 
 \textbf{¿Por qué falla el método robusto aquí?}
+
 - Seleccionar ``los mejores'' ejemplos de un pool de scores aleatorios sigue siendo principalmente ruido
-- El tamaño pequeño impide que incluso aumentar max_iter solucione el problema
-- No es un fallo del método, sino del dataset que viola req estructura (n >> p)
+
+- No es un fallo del método, sino del dataset que viola la estructura (n >> p)
 
 \paragraph{2. MiniBooNE: Limitación conceptual severa}
+
 
 \textbf{Características:}
 \begin{itemize}
@@ -907,7 +892,7 @@ Los cuatro casos de fracaso comparten patrones distintos pero igualmente problem
     \item Features: 50 → ratio 2{,}601:1 (excelente en teoría)
 \end{itemize}
 
-\textbf{Resultado paradójico:}
+\textbf{Resultado:}
 El método robusto logra \textbf{convergencia técnica casi perfecta} ($\hat{\alpha}$ error 6\% a top 30\%) pero el Spearman ranking no mejora (se mantiene ~0.05). 
 
 \textbf{Diagnóstico}: No es un problema de estimación de $\alpha$. Es una \textbf{limitación conceptual del framework PU}:
@@ -939,50 +924,6 @@ Spearman ranking & Varía con alpha (señal presente) & Bajo (<0.20) o invariabl
 \bottomrule
 \end{tabular}
 \end{table}
-
-\subsubsection{Decisión secuencial}
-
-Para determinar si usar el método robusto en un nuevo dataset, seguir esta secuencia:
-
-\begin{enumerate}
-    \item \textbf{¿Es la clase positiva >65\% o <25\%?}
-    \begin{itemize}
-        \item SÍ → No usar PU. Es limitación conceptual, no técnica.
-    \end{itemize}
-    
-    \item \textbf{¿Son razón n/features < 5:1?}
-    \begin{itemize}
-        \item SÍ → No usar PU sin reducción de dimensionalidad (PCA primero).
-        \item Nota: Sonar (3.5:1) falló completamente; Ionosphere (10.3:1) casi falló.
-    \end{itemize}
-    
-    \item \textbf{¿Es n < 3{,}000 muestras?}
-    \begin{itemize}
-        \item SÍ → PU es arriesgado. Usar con mucha cautela o aumentar datos.
-        \item Nota: Spambase (4{,}601) está en el límite inferior de viabilidad.
-    \end{itemize}
-    
-    \item \textbf{Si pasó los 3 filtros anteriores:}
-    \begin{itemize}
-        \item \textbf{Primera ejecución}: Usar método media (simple), observe error de $\hat{\alpha}$
-        \item \textbf{Si error > 15\%}: Método robusto probablemente mejorará significativamente
-        \item \textbf{Si error < 10\%}: Método media ya converge bien; robusto aportará poco
-    \end{itemize}
-\end{enumerate}
-
-\subsection{Recomendación final}
-
-El método de positivos confiables es \textbf{altamente efectivo pero con fronteras claras}:
-
-\begin{itemize}
-    \item \textbf{Aplicar sin dudas}: Balance 30-50\%, $n > 5{,}000$, ratio n/features > 80:1. Espere mejoras de 10-20 puntos en error de $\hat{\alpha}$.
-    
-    \item \textbf{Aplicar con cuidado}: Balance 30-50\%, $n = 3{,}500$--$5{,}000$, ratio n/features > 10:1. Mejoras reales pero modestas.
-    
-    \item \textbf{NO aplicar}: Balance <25\% o >65\%, o ratio n/features < 5:1, o $n < 3{,}000$. El método no puede compensar estas limitaciones estructurales.
-\end{itemize}
-
-Los casos de éxito demuestran que bajo condiciones favorable, el método robusto logra convergencia casi perfecta de $\hat{\alpha}$ ($< 5\%$ error) y estabilidad extrema en métricas finales (AUC, Spearman). Los casos de fracaso demuestran que no hay ``panacea'': hay límites inherentes a lo que el machine learning puede hacer sin suficiente datos y balance razonable.
 
 
 \section{Análisis estadístico}
@@ -1109,5 +1050,134 @@ Datasets donde se observa error de $\hat{\alpha} > 15\%$ con método mean:
     \item $n = 3{,}500$-$5{,}000$ (Spambase en borde): Funciona pero marginal
     \item $n < 1{,}000$ (Ionosphere 351, Sonar 208): Falla o muy arriesgado
 \end{itemize}
+
+
+% ===================== MICROARRAYS =====================
+\section{Análisis de Microarrays: CNS, Colon Cancer, DLBCL}
+
+\subsection{Contexto}
+
+Los datasets de microarrays (CNS, Colon Cancer, DLBCL) representan un escenario biológico completamente diferente a los datasets estándar evaluados anteriormente. Estos datasets se caracterizan por:
+
+\begin{itemize}
+    \item \textbf{Muy alta dimensionalidad}: 4{,}027--7{,}130 features (genes/sondas)
+    \item \textbf{Muy bajo número de muestras}: 47--62 muestras
+    \item \textbf{Ratio n/features}: 0.009--0.015 (muy bajo)
+\end{itemize}
+
+Este escenario es opuesto al de los datasets mayoritarios (mayor nº de muestras que features)
+
+\subsection{Resultados de Tests Estadísticos}
+
+\subsubsection{CNS Microarray (47 muestras, 7{,}130 features)}
+
+\begin{table}[H]
+\centering
+\caption{Tests Estadísticos para CNS Microarray}
+\begin{tabular}{llll}
+\toprule
+Comparación & Método & p-value & Resultado \\
+\midrule
+PU vs Real & mean & 0.1358 & {No significativo} \\
+PU vs Naive & mean & 0.7765 & {No significativo} \\
+PU vs Real & robust & 0.1148 & {No significativo} \\
+PU vs Naive & robust & 0.7394 & {No significativo} \\
+mean vs robust & PU & 0.1927 & {No mejora} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{Interpretación CNS}: 
+\begin{itemize}
+    \item No hay diferencia significativa entre PU y Real ($p=0.136$, muy lejos de $\alpha=0.05$)
+    \item A pesar de que PU y Real son similares, no hay diferencia significativa entre PU y Naive ($p=0.777$, prácticamente indistinguibles)
+    \item Ni el método mean ni robust logran capturar información relevante
+    \item Robust NO mejora sobre mean ($p=0.193$)
+\end{itemize}
+
+\subsubsection{Colon Cancer (62 muestras, 2{,}000 features)}
+
+\begin{table}[H]
+\centering
+\caption{Tests Estadísticos para Colon Cancer}
+\begin{tabular}{llll}
+\toprule
+Comparación & Método & p-value & Resultado \\
+\midrule
+PU vs Real & mean & $2.67 \times 10^{-4}$ & \textcolor{green}{Sí significativo} \\
+PU vs Naive & mean & 0.3387 & {No significativo} \\
+PU vs Real & robust & $3.35 \times 10^{-4}$ & \textcolor{green}{Sí significativo} \\
+PU vs Naive & robust & 0.4483 & {No significativo} \\
+mean vs robust & PU & 0.6044 & {No mejora} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{Interpretación Colon Cancer}:
+\begin{itemize}
+    \item Sí hay diferencia significativa PU $\neq$ Real ($p < 0.001$): El método PU produce rankings \textit{estadísticamente distintos} del real
+    \item PU no es significativamente mejor que Naive ($p=0.339$)
+    \item Robust NO mejora sobre mean ($p=0.604$)
+\end{itemize}
+
+\subsubsection{DLBCL Microarray (47 muestras, 4{,}027 features)}
+
+\begin{table}[H]
+\centering
+\caption{Tests Estadísticos para DLBCL}
+\begin{tabular}{llll}
+\toprule
+Comparación & Método & p-value & Resultado \\
+\midrule
+PU vs Real & mean & $3.99 \times 10^{-6}$ & \textcolor{green}{Sí significativo} \\
+PU vs Naive & mean & 0.3579 & {No significativo} \\
+PU vs Real & robust & $3.90 \times 10^{-6}$ & \textcolor{green}{Sí significativo} \\
+PU vs Naive & robust & 0.3554 & {No significativo} \\
+mean vs robust & PU & 0.5368 & {No mejora} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{Interpretación DLBCL}:
+\begin{itemize}
+    \item {Diferencia altamente significativa PU $\neq$ Real} ($p < 0.000001$): El método PU produce un ranking completamente distinto
+    \item PU no es significativamente mejor que Naive ($p=0.356$)
+    \item {Robusto NO mejora} ($p=0.537$), ambos métodos son igualmente inútiles
+\end{itemize}
+
+\subsection{Diagnóstico y Conclusiones para Microarrays}
+
+\textbf{Sobreajuste inevitable}: Cualquier clasificador (PU o no) tiende a ajustarse al ruido más que a patrones reales. El ranking que produce no refleja relaciones verdaderas entre features.
+
+{Conclusión sobre métodos robusto vs mean:} En microarrays, ambos métodos fallan por la misma razón subyacente (sobre-parametrización), no porque uno sea mejor que otro. El hecho de que robust NO mejore mean es indicativo de que el problema no es estimación de $\alpha$, sino viabilidad fundamental del enfoque.
+
+Los datasets de microarrays son idadecuados para el método PU en selección de features. La razón no es un defecto del método PU, sino un desajuste fundamental entre la metodología (requiere n $\gg$ p para inferencia estadística confiable) y la naturaleza de los datos (n $\ll$ p). 
+
+En este escenario, usar MI-PU produce rankings indistinguibles de usar MI-Naive (o incluso aleatorio). La información contenida en $S$ no es suficiente para que el paso de corrección por $\alpha$ contribuya valor. Se necesita o bien:
+\begin{itemize}
+    \item Muestras mucho más grandes ($n \geq 1{,}000$), o
+    \item Reducción de dimensionalidad previa ($p \approx 50$-$100$), o
+\end{itemize}
+
+
+\subsubsection{Recomendaciones Operativas}
+
+\begin{enumerate}
+    \item \textbf{No usar PU en microarrays sin preprocesamiento} (p.ej., feature selection previo o PCA a 50-100 componentes)
+    
+    \item \textbf{Si se insiste en usar PU}:
+    \begin{itemize}
+        \item Aplicar regularización fuerte (L2) en el clasificador PU
+        \item Usar validación cruzada estricta (leave-one-out en datasets tan pequeños)
+        \item Considerar métodos de ensemble para reducir varianza
+    \end{itemize}
+    
+    \item \textbf{Alternativas recomendadas}:
+    \begin{itemize}
+        \item Métodos de test estadísticos simples (t-test, Mann-Whitney) con corrección Bonferroni
+        \item Métodos bayesianos diseñados para high-dimensional, low-n (prior informativo)
+        \item Métodos de RNA-seq específicos del dominio (limma, DESeq2) si los datos lo permiten
+    \end{itemize}
+\end{enumerate}
 
 \end{document}
