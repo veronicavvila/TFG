@@ -156,7 +156,8 @@ Los ejemplos con scores más altos (top 20\%) no son representativos de la propo
     \item Este es un \textbf{resultado positivo}: demuestra que en datasets "fáciles", el método PU no es sensible a errores de calibración de $\alpha$.
 \end{enumerate}
 
-En resumen, aunque el método robusto no es recomendable para estimar $\hat{\alpha}$ con precisión en Breast Cancer, su uso no introduce deterioro en la tarea final (selección de features y predicción), que es lo que importa en la práctica.
+En resumen, aunque el ranking final de features es insensible a errores de calibración de $\alpha$ (gracias a la claridad de las features), el AUC no mejora estadísticamente con el método robusto. Recomendación: usar mean en lugar de robusto en Breast Cancer para simplificar la metodología sin perder desempeño.
+
 
 % ===================== SONAR =====================
 \section{Sonar}
@@ -218,7 +219,7 @@ Se evaluó la estimación robusta de $\alpha$ en Sonar variando el percentil des
 
 Incluso usando el 100\% de datos (es decir, toda la información disponible), el estimador sobrestima por más de $3.3\times$ el valor real. Esto es el indicador más claro de que el problema es \textbf{estructural}, no metodológico.
 
-\paragraph{Impacto en métricas finales --- Invariabilidad por colapso:} Contraintuitivamente, AUC se mantiene prácticamente constante:
+\paragraph{Impacto en métricas finales, invariabilidad por colapso:} Contraintuitivamente, AUC se mantiene prácticamente constante:
 
 \begin{itemize}
     \item \textbf{AUC}: varía en rango $[0.759, 0.764]$ (variación de $\sim 0.6\%$), prácticamente flat
@@ -228,7 +229,7 @@ Incluso usando el 100\% de datos (es decir, toda la información disponible), el
 
 La invariabilidad de AUC no es un aspecto positivo: ocurre porque el clasificador PU ha colapsado y los scores son esencialmente aleatorios. Todas las estimaciones de $\alpha$ son igualmente malas, por lo que el comportamiento es uniforme.
 
-\paragraph{Conclusión --- Inaplicable categóricamente en Sonar:} Sonar es un caso extremo que demuestra los límites absolutos del método PU:
+\paragraph{Conclusión, inaplicable categóricamente en Sonar:} Sonar es un caso extremo que demuestra los límites absolutos del método PU:
 
 \begin{enumerate}
     \item El dataset tiene ratio muestras/features de apenas $\approx 3.5:1$ (208 muestras / 60 features). Esta es una proporción donde incluso métodos clásicos de aprendizaje supervisado fallan. El clasificador logístico no puede aprender una frontera confiable de separación, y los scores resultan esencialmente aleatorios.
@@ -237,7 +238,10 @@ La invariabilidad de AUC no es un aspecto positivo: ocurre porque el clasificado
     \item El Spearman bajo (máximo $\approx 0.21$) confirma que ningún ranking derivado del método PU tiene valor predictivo.
 \end{enumerate}
 
-En resumen, \textbf{Sonar es fundamentalmente inaplicable al framework PU} con este cuerpo de datos. No es una limitación del método robusto específicamente, sino del dataset: con tan pocas muestras relativas a features, el método PU (medio o robusto) no puede funcionar. Antes de intentar selección robusta de $\alpha$, el dataset requeriría:
+En resumen, Sonar es problemático para PU, pero el método robusto logra una mejora estadística marginal: test Robust > Mean: $p=0.0166$ significativo. Aunque el rendimiento absoluto es pobre (AUC $\approx 0.697$, Spearman $\approx 0.21$), el robusto obtiene una mejora de sobre mean (diferencia AUC: +0.009).
+
+Recomendación: Si se insiste en usar Sonar, preferir método robusto sobre mean, aunque ambos son inaplicables. El dataset requeriría:
+
 \begin{itemize}
     \item Reducción de dimensionalidad (PCA, selección de features previos)
     \item Un modelo de clasificación más regularizado
@@ -597,7 +601,7 @@ El error disminuye casi linealmente conforme aumenta el percentil, reflejando qu
     \item En la práctica, si se desea aprovechar el método robusto en Spambase, usar percentiles altos ($\geq 50\%$) minimiza sobreestimación y mantiene estabilidad de AUC.
 \end{enumerate}
 
-En resumen, el método robusto en Spambase es \textbf{aplicable pero requiere cuidado en la elección del percentil}. No es un caso de fallo categórico como Sonar/Ionosphere, pero tampoco de éxito excepcional como Phoneme/MAGIC Telescope.
+En resumen, el método robusto en Spambase no mejora al mean, es \textbf{aplicable pero requiere cuidado en la elección del percentil}. No es un caso de fallo categórico como Sonar/Ionosphere, pero tampoco de éxito excepcional como Phoneme/MAGIC Telescope.
 
 % ===================== MAGIC TELESCOPE =====================
 \section{MAGIC Telescope}
@@ -1179,5 +1183,96 @@ En este escenario, usar MI-PU produce rankings indistinguibles de usar MI-Naive 
         \item Métodos de RNA-seq específicos del dominio (limma, DESeq2) si los datos lo permiten
     \end{itemize}
 \end{enumerate}
+
+% ===================== TABLAS DE RESULTADOS FINALES =====================
+
+\section{Tablas de Resultados Comparativos}
+
+\subsection{Tabla 1: Desempeño por Dataset}
+
+\begin{table}[H]
+\centering
+\caption{Resumen de desempeño por dataset: características, método recomendado, y mejora robusto vs mean}
+\resizebox{\textwidth}{!}{
+\begin{tabular}{lcccccc}
+\toprule
+\textbf{Dataset} & \textbf{N} & \textbf{Features} & \textbf{Balance} & \textbf{Método} & \textbf{Robust > Mean} & \textbf{Conclusión} \\
+\midrule
+Phoneme & 5{,}404 & 5 & 50\% & \textbf{ROBUST} & $p=4.27e-41$ ✓ & EXCELENTE \\
+MAGIC Telescope & 19{,}020 & 10 & 35\% & \textbf{ROBUST} & $p=9.21e-50$ ✓ & EXCELENTE\\
+MiniBooNE & 130{,}065 & 50 & 72\% & \textbf{ROBUST} & $p=4.04e-09$ ✓ & BUENO \\
+Sonar & 208 & 60 & 50\% & MEAN & $p=0.0166$ ✓ & MARGINAL \\
+Spambase & 4{,}601 & 57 & 39\% & \textbf{MEAN} & $p=1.0$ ✗ & NO MEJORA \\
+Breast Cancer & 569 & 19 & 37\% & \textbf{MEAN} & $p=0.0763$ ✗ & NO MEJORA \\
+Ionosphere & 351 & 34 & 64\% & MEAN & $p=0.9998$ ✗ & EMPEORA \\
+CNS Microarray & 47 & 7{,}130 & 47\% & --- & $p=0.1927$ ✗ & NO APLICABLE - n$\ll$p \\
+Colon Cancer & 62 & 2{,}000 & 56\% & --- & $p=0.6044$ ✗ & NO APLICABLE - n$\ll$p \\
+DLBCL Microarray & 47 & 4{,}027 & 53\% & --- & $p=0.5368$ ✗ & NO APLICABLE - n$\ll$p \\
+\bottomrule
+\end{tabular}
+}
+\end{table}
+
+\textbf{Leyenda}: 
+\begin{itemize}
+    \item ✗ = Robusto NO mejora (p > 0.05) o empeora
+    \item  p-value: Test unilateral $H_0: PU_{robust} \leq PU_{mean}$ vs $H_1: PU_{robust} > PU_{mean}$
+\end{itemize}
+
+\subsection{Tabla 2: Resultados de Tests Estadísticos Agregados}
+
+\begin{table}[H]
+\centering
+\caption{Tests estadísticos completos por dataset: comparaciones PU vs Real, PU vs Naive, Mean vs Robust}
+\resizebox{\textwidth}{!}{
+\begin{tabular}{lccc}
+\toprule
+\textbf{Dataset} & \textbf{Test 1:} & \textbf{Test 2:} & \textbf{Test 5:} \\
+& \textbf{H0: PU=Real} & \textbf{H0: PU$\leq$Naive} & \textbf{H0: Robust$\leq$Mean} \\
+& \textbf{(mean)} & \textbf{(mean)} & \\
+\midrule
+Phoneme & $p=1.0$ (H0) & $p=3.99e-10$ ✓✓ & $p=4.27e-41$ ✓✓✓ \\
+MAGIC Telescope & $p=1.0$ (H0) & $p=3.99e-10$ ✓✓ & $p=9.21e-50$ ✓✓✓ \\
+MiniBooNE & $p=1.0$ (H0) & $p=1.0$ (H0) & $p=4.04e-09$ ✓✓✓ \\
+Spambase & $p=1.0$ (H0) & $p=3.99e-10$ ✓✓ & $p=1.0$ (H0) \\
+Breast Cancer & $p=1.0$ (H0) & $p=1.0$ (H0) & $p=0.0763$ (H0) \\
+Ionosphere & $p=1.0$ (H0) & $p=1.07e-08$ ✓✓ & $p=0.9998$ (H0) \\
+Sonar & $p=1.0$ (H0) & $p=0.993$ (H0) & $p=0.0166$ ✓ \\
+CNS & $p=0.1358$ (H0) & $p=0.7765$ (H0) & $p=0.1927$ (H0) \\
+Colon Cancer & $p=2.67e-4$ ✓ & $p=0.3387$ (H0) & $p=0.6044$ (H0) \\
+DLBCL & $p=3.99e-6$ ✓ & $p=0.3579$ (H0) & $p=0.5368$ (H0) \\
+\bottomrule
+\end{tabular}
+}
+\end{table}
+
+\textbf{Criterios de significancia estadística}:
+\begin{itemize}
+    \item ✓✓✓ = Altamente significativo ($p < 1e-10$) - H0 rechazada, mejora clara y robusta
+    \item ✓✓ = Muy significativo ($p < 1e-5$) - H0 rechazada, mejora confirmada
+    \item ✓ = Significativo ($p < 0.05$) - H0 rechazada, mejora marginal pero válida
+    \item (H0) = No significativo ($p \geq 0.05$) - H0 no se rechaza
+\end{itemize}
+
+\subsection{Conclusiones Prácticas}
+
+\subsubsection{Datasets de ÉXITO (Usar Método Robusto)}
+\begin{itemize}
+    \item \textbf{Phoneme, MAGIC Telescope, MiniBooNE}: Usar método robusto sin dudarlo. Test 5 muestra p$<1e-9$, indicando mejoras masivas y altamente confiables.
+    \item \textbf{Criterios compartidos}: $n > 5{,}000$, balance de clases 30-72\%, ratio n/p $> 80:1$
+\end{itemize}
+
+\subsubsection{Datasets de INTERMEDIO (Preferir Mean, Robusto opcional)}
+\begin{itemize}
+    \item \textbf{Spambase, Breast Cancer}: Usar mean como primera opción. Robusto no proporciona mejora estadística.
+    \item \textbf{Ionosphere}: Usar mean. Robusto empeora significativamente (p=0.9998).
+    \item \textbf{Criterios compartidos}: $n < 5{,}000$ o balance desbalanceado (>60\%)
+\end{itemize}
+
+\subsubsection{Datasets de FRACASO (Evitar)}
+\begin{itemize}
+    \item \textbf{Sonar}: Ratio n/p extremadamente bajo (3.5:1). Ni mean ni robust funcionan. Si es imprescindible, usar mean como fallback.
+    \item \textbf{Microarrays (CNS, Colon, DLBCL)}: n $\ll$ p hace ambos métodos inútiles. Requieren preprocesamiento (PCA, feature selection previo) antes de aplicar PU.
+\end{itemize}
 
 \end{document}

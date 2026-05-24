@@ -100,6 +100,40 @@ def comparar_metodos(
     return resultados
 
 
+def calcular_overlap(ranking_a, ranking_b, k):
+    """
+    Calcula el overlap entre dos rankings en posición top-k.
+    
+    Parámetros:
+    -----------
+    ranking_a, ranking_b: arrays de índices ordenados por importancia
+    k: número de top features a comparar
+    
+    Devuelve:
+    ---------
+    dict con:
+      - 'count': número de features en común
+      - 'porcentaje': porcentaje de overlap (0-100%)
+      - 'features_a_only': features solo en ranking_a
+      - 'features_b_only': features solo en ranking_b
+      - 'features_common': features en ambos rankings
+    """
+    top_k_a = set(ranking_a[:k])
+    top_k_b = set(ranking_b[:k])
+    
+    common = top_k_a & top_k_b
+    only_a = top_k_a - top_k_b
+    only_b = top_k_b - top_k_a
+    
+    return {
+        'count': len(common),
+        'porcentaje': (len(common) / k) * 100,
+        'features_a_only': only_a,
+        'features_b_only': only_b,
+        'features_common': common,
+    }
+
+
 def spearman_rankings(ranking_a, ranking_b):
     """
     Calcula la correlación de Spearman entre dos rankings completos.
@@ -111,5 +145,42 @@ def spearman_rankings(ranking_a, ranking_b):
     pos_b = np.empty(n, dtype=float)
     pos_a[ranking_a] = np.arange(n)
     pos_b[ranking_b] = np.arange(n)
+    corr, _ = spearmanr(pos_a, pos_b)
+    return float(corr)
+
+
+def spearman_rankings_topk(ranking_a, ranking_b, k):
+    """
+    Calcula la correlación de Spearman solo sobre los top-k elementos de cada ranking.
+    
+    Parámetros:
+    -----------
+    ranking_a, ranking_b: arrays de índices ordenados por importancia (ranking completo)
+    k: número de top elementos a considerar
+    
+    Devuelve:
+    ---------
+    float en [-1, 1]; 1 = rankings idénticos en top-k
+    """
+    # Obtener los top-k de cada ranking
+    top_k_a = set(ranking_a[:k])
+    top_k_b = set(ranking_b[:k])
+    
+    # Elementos comunes en top-k
+    common = top_k_a & top_k_b
+    
+    if len(common) == 0:
+        return np.nan
+    
+    # Calcular posiciones en top-k solo para elementos comunes
+    pos_a = []
+    pos_b = []
+    
+    for idx in common:
+        # Posición en ranking_a (en el top-k)
+        pos_a.append(list(ranking_a[:k]).index(idx))
+        # Posición en ranking_b (en el top-k)
+        pos_b.append(list(ranking_b[:k]).index(idx))
+    
     corr, _ = spearmanr(pos_a, pos_b)
     return float(corr)

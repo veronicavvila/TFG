@@ -67,6 +67,8 @@ def hacer_tests_dataset(dataset_name):
         resultados_tests.append(resultado)
         
         print(f"Test: PU = Real (bilateral)")
+        print(f"  H0: PU AUC = Real AUC (método PU equivalente a supervisado)")
+        print(f"  H1: PU AUC ≠ Real AUC (método PU produce ranking diferente)")
         print(f"  N: {n}")
         print(f"  PU AUC:   {auc_pu_mean.mean():.4f} ± {auc_pu_mean.std():.4f}")
         print(f"  Real AUC: {auc_real_mean.mean():.4f} ± {auc_real_mean.std():.4f}")
@@ -93,6 +95,8 @@ def hacer_tests_dataset(dataset_name):
         resultados_tests.append(resultado)
         
         print(f"Test: PU > Naive (unilateral)")
+        print(f"  H0: PU AUC ≤ Naive AUC (PU no mejora)")
+        print(f"  H1: PU AUC > Naive AUC (PU mejora)")
         print(f"  N: {n}")
         print(f"  PU AUC:    {auc_pu_mean.mean():.4f} ± {auc_pu_mean.std():.4f}")
         print(f"  Naive AUC: {auc_naive_mean.mean():.4f} ± {auc_naive_mean.std():.4f}")
@@ -130,6 +134,8 @@ def hacer_tests_dataset(dataset_name):
         resultados_tests.append(resultado)
         
         print(f"Test: PU = Real (bilateral)")
+        print(f"  H0: PU AUC = Real AUC (método PU equivalente a supervisado)")
+        print(f"  H1: PU AUC ≠ Real AUC (método PU produce ranking diferente)")
         print(f"  N: {n}")
         print(f"  PU AUC:   {auc_pu_robust.mean():.4f} ± {auc_pu_robust.std():.4f}")
         print(f"  Real AUC: {auc_real_robust.mean():.4f} ± {auc_real_robust.std():.4f}")
@@ -156,6 +162,8 @@ def hacer_tests_dataset(dataset_name):
         resultados_tests.append(resultado)
         
         print(f"Test: PU > Naive (unilateral)")
+        print(f"  H0: PU AUC ≤ Naive AUC (PU no mejora)")
+        print(f"  H1: PU AUC > Naive AUC (PU mejora)")
         print(f"  N: {n}")
         print(f"  PU AUC:    {auc_pu_robust.mean():.4f} ± {auc_pu_robust.std():.4f}")
         print(f"  Naive AUC: {auc_naive_robust.mean():.4f} ± {auc_naive_robust.std():.4f}")
@@ -175,17 +183,17 @@ def hacer_tests_dataset(dataset_name):
         if len(auc_pu_mean) == len(auc_pu_robust):
             n = len(auc_pu_mean)
             
-            # Test 5: PU_mean < PU_robust (unilateral)
-            t_stat, p_val = ttest_rel(auc_pu_mean, auc_pu_robust, alternative='less')
+            # Test 5: PU_robust > PU_mean (¿Robust mejora Mean?)
+            t_stat, p_val = ttest_rel(auc_pu_robust, auc_pu_mean, alternative='greater')
             resultado = {
                 'dataset': dataset_name,
                 'metodo': 'mean_vs_robust',
-                'test': 'PU_mean < PU_robust',
+                'test': 'Robust > Mean',
                 'tipo': 'unilateral',
                 'n': n,
                 'media_mean': auc_pu_mean.mean(),
                 'media_robust': auc_pu_robust.mean(),
-                'diferencia': auc_pu_mean.mean() - auc_pu_robust.mean(),
+                'diferencia': auc_pu_robust.mean() - auc_pu_mean.mean(),
                 't_statistic': t_stat,
                 'p_value': p_val,
                 'significativo': 'Sí' if p_val < 0.05 else 'No',
@@ -193,11 +201,13 @@ def hacer_tests_dataset(dataset_name):
             }
             resultados_tests.append(resultado)
             
-            print(f"Test: PU_mean < PU_robust (¿Robust mejora Mean?)")
+            print(f"Test: Robust > Mean (¿Robust mejora Mean?)")
+            print(f"  H0: Robust AUC ≤ Mean AUC (Robust no mejora)")
+            print(f"  H1: Robust AUC > Mean AUC (Robust mejora)")
             print(f"  N: {n}")
             print(f"  PU Mean AUC:   {auc_pu_mean.mean():.4f} ± {auc_pu_mean.std():.4f}")
             print(f"  PU Robust AUC: {auc_pu_robust.mean():.4f} ± {auc_pu_robust.std():.4f}")
-            print(f"  Diferencia: {auc_pu_mean.mean() - auc_pu_robust.mean():.4f}")
+            print(f"  Diferencia: {auc_pu_robust.mean() - auc_pu_mean.mean():.4f}")
             print(f"  t-statistic: {t_stat:.4f}, p-value: {p_val:.4f}")
             print(f"  Conclusión: {resultado['conclusion']}\n")
     

@@ -26,6 +26,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import mlflow
 import mlflow.sklearn
+import traceback
 
 # Importar configuración y funciones
 from src.config_clasificador import (
@@ -34,6 +35,7 @@ from src.config_clasificador import (
     EXPERIMENT_NAME, RUN_NAME, TOP_K, USE_FEATURE_SELECTION
 )
 from src.datasets import load_dataset
+from src.datasets import crear_splitter_cv
 from src.data_utiles import generar_etiquetas_pu, añadir_ruido_gaussiano
 from src.pu_model import entrenar_clasificador_pu, estimar_alpha, estimar_alpha_robusto, obtener_scores
 from src.evaluacion import calcular_mi_real, calcular_mi_naive
@@ -93,20 +95,26 @@ def crear_visualizaciones(df_resultados, df_resumen, output_dir):
     x = np.arange(len(metricas))
     width = 0.25
     
-    datos_plot = {}
-    for metodo in metodos:
-        subset = df_resumen[df_resumen['metodo'] == metodo.lower()]
-        datos_plot[metodo] = {
-            'media': subset[subset['metrica'].isin(metricas)].set_index('metrica')['media'],
-            'std': subset[subset['metrica'].isin(metricas)].set_index('metrica')['std']
-        }
+    # Nota: df_resumen solo resume AUC por alpha; para el barplot de (auc, acc, prec, rec)
+    # tomamos medias/std directamente de df_resultados, que sí contiene todas las métricas.
+    prefix_by_method = {'Real': 'real', 'PU': 'pu', 'Naive': 'naive'}
     
     # Plotear barras
     colors_dict = {'Real': '#2ecc71', 'PU': '#3498db', 'Naive': '#e74c3c'}
     for i, metodo in enumerate(metodos):
         offset = (i - 1) * width
-        means = [datos_plot[metodo]['media'].get(m, 0) for m in metricas]
-        stds = [datos_plot[metodo]['std'].get(m, 0) for m in metricas]
+        prefix = prefix_by_method[metodo]
+        means = []
+        stds = []
+        for m in metricas:
+            col = f"{prefix}_{m}"
+            if col in df_resultados.columns:
+                values = df_resultados[col].dropna().values
+                means.append(float(np.nanmean(values)) if len(values) else 0.0)
+                stds.append(float(np.nanstd(values)) if len(values) else 0.0)
+            else:
+                means.append(0.0)
+                stds.append(0.0)
         
         ax.bar(x + offset, means, width, label=metodo, 
                color=colors_dict[metodo], alpha=0.8, capsize=5)
@@ -310,8 +318,7 @@ def ejecutar_experimento():
                 p_y_full = estimar_probabilidad_real(scores_init, alpha_hat_init)
                 
                 # K-Fold
-                kfold = StratifiedKFold(n_splits=N_KFOLDS, shuffle=True, 
-                                       random_state=seed)
+                kfold = crear_splitter_cv(meta.get("kind", ""), n_splits=N_KFOLDS, random_state=seed)
                 
                 for fold_idx, (train_idx, test_idx) in enumerate(kfold.split(X_noisy, y)):
                     
@@ -353,38 +360,45 @@ def ejecutar_experimento():
         print(f"       {csv_path}\n")
         
         # Estadísticas        
-        # Resumen por método
+        # Resumen por método Y por alpha (solo AUC)
         resumen_metodo = []
-        for metodo in ['real', 'pu', 'naive']:
-            for metrica in ['auc', 'acc', 'prec', 'rec']:
-                col = f'{metodo}_{metrica}'
-                if col in df_resultados.columns:
-                    datos = df_resultados[col].dropna()
-                    resumen_metodo.append({
-                        'metodo': metodo,
-                        'metrica': metrica,
-                        'media': datos.mean(),
-                        'std': datos.std(),
-                        'mediana': datos.median(),
-                        'min': datos.min(),
-                        'max': datos.max(),
-                        'n': len(datos),
-                        'ic95_lower': datos.mean() - 1.96 * datos.std() / np.sqrt(len(datos)),
-                        'ic95_upper': datos.mean() + 1.96 * datos.std() / np.sqrt(len(datos)),
-                    })
+        for alpha in ALPHAS:
+            for metodo in ['real', 'pu', 'naive']:
+                for metrica in ['auc']:
+                    col = f'{metodo}_{metrica}'
+                    if col in df_resultados.columns:
+                        # Filtrar por alpha
+                        datos = df_resultados[df_resultados['alpha'] == alpha][col].dropna()
+                        if len(datos) > 0:
+                            resumen_metodo.append({
+                                'alpha': alpha,
+                                'metodo': metodo,
+                                'media': datos.mean(),
+                                'std': datos.std(),
+                                'mediana': datos.median(),
+                                'min': datos.min(),
+                                'max': datos.max(),
+                                'n': len(datos),
+                                'ic95_lower': datos.mean() - 1.96 * datos.std() / np.sqrt(len(datos)),
+                                'ic95_upper': datos.mean() + 1.96 * datos.std() / np.sqrt(len(datos)),
+                            })
         
         df_resumen = pd.DataFrame(resumen_metodo)
+        metodo_order = pd.CategoricalDtype(categories=['real', 'pu', 'naive'], ordered=True)
+        if 'metodo' in df_resumen.columns:
+            df_resumen['metodo'] = df_resumen['metodo'].astype(metodo_order)
+        df_resumen = df_resumen.sort_values(['alpha', 'metodo']).reset_index(drop=True)
         resumen_path = output_dir / f"resumen_{DATASET}.csv"
         df_resumen.to_csv(resumen_path, index=False)
         mlflow.log_artifact(str(resumen_path))
         
-        print("RESUMEN POR MÉTODO:")
+        print("RESUMEN AUC POR MÉTODO:")
         print("-" * 70)
         for metodo in ['real', 'pu', 'naive']:
             print(f"\n{metodo.upper()}:")
             subset = df_resumen[df_resumen['metodo'] == metodo]
             for _, row in subset.iterrows():
-                print(f"  {row['metrica']:4s}: {row['media']:.4f} ± {row['std']:.4f}")
+                print(f"  α={row['alpha']}: {row['media']:.4f} ± {row['std']:.4f}")
         
         # Log métricas resumen en MLflow
         auc_real = df_resultados['real_auc'].values
@@ -417,6 +431,7 @@ def ejecutar_experimento():
             print(f"  - {barplot_path.name}\n")
         except Exception as e:
             print(f"Error al generar visualizaciones: {e}\n")
+            print(traceback.format_exc())
         
         # Resumen final
         print(f"{'-'*70}")

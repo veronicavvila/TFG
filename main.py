@@ -1,3 +1,4 @@
+import os
 import numpy as np
 import pandas as pd
 import matplotlib
@@ -5,18 +6,12 @@ matplotlib.use('Agg')  # backend sin ventana
 import matplotlib.pyplot as plt
 import mlflow
 from mlflow.tracking import MlflowClient
-from sklearn.model_selection import train_test_split, StratifiedKFold
-from sklearn.linear_model import LogisticRegression
-from sklearn.preprocessing import StandardScaler
-from sklearn.metrics import roc_auc_score
-from scipy.stats import spearmanr
-
 from src.data_utiles import generar_etiquetas_pu, añadir_ruido_gaussiano
 from src.config import *
-from src.datasets import load_dataset_from_config, load_dataset
+from src.datasets import load_dataset_from_config, load_dataset, crear_splitter_cv
 from src.pu_model import entrenar_clasificador_pu, estimar_alpha, estimar_alpha_robusto, obtener_scores, estimar_probabilidad_real
 from src.mi_utiles import calcular_mi_ranking, guardar_ranking
-from src.evaluacion import comparar_metodos, calcular_mi_naive, calcular_mi_real, calcular_varianza, spearman_rankings
+from src.evaluacion import comparar_metodos, calcular_mi_naive, calcular_mi_real, calcular_varianza, spearman_rankings, spearman_rankings_topk
 
 
 def _topk_overlap(ranking_a, ranking_b, k):
@@ -33,7 +28,7 @@ def _ranking_instability(rankings_list):
     return float(np.mean(np.std(pos_matrix, axis=0)))
 
 
-def _sweep_alpha(X, y, feature_names, estimation_method):
+def _sweep_alpha(X, y, feature_names, estimation_method, dataset_kind, output_dir):
     """Sweep variando alpha (fijo top_q_percent)."""
     print(f"\n{'='*70}")
     print("EJECUTANDO SWEEP DE ALPHA")
@@ -59,7 +54,7 @@ def _sweep_alpha(X, y, feature_names, estimation_method):
             
             p_y = estimar_probabilidad_real(scores, alpha_hat)
             
-            kfold = StratifiedKFold(n_splits=5, shuffle=True, random_state=seed)
+            kfold = crear_splitter_cv(dataset_kind, n_splits=5, random_state=seed)
             fold_results = []
             
             for fold_idx, (train_idx, test_idx) in enumerate(kfold.split(X_noisy, y)):
@@ -89,10 +84,15 @@ def _sweep_alpha(X, y, feature_names, estimation_method):
                     ranking, ranking_naive, ranking_real, ranking_var, k=TOP_K
                 )
                 
-                spearman_naive = spearman_rankings(ranking_naive, ranking_real)
-                spearman_pu    = spearman_rankings(ranking,       ranking_real)
-                spearman_var   = spearman_rankings(ranking_var,   ranking_real)
-                spearman_real  = 1.0
+                # Spearman completo (sobre todas las características)
+                spearman_naive_full = spearman_rankings(ranking_naive, ranking_real)
+                spearman_pu_full    = spearman_rankings(ranking,       ranking_real)
+                spearman_var_full   = spearman_rankings(ranking_var,   ranking_real)
+                
+                # Spearman top-k 
+                spearman_naive_topk = spearman_rankings_topk(ranking_naive, ranking_real, TOP_K)
+                spearman_pu_topk    = spearman_rankings_topk(ranking,       ranking_real, TOP_K)
+                spearman_var_topk   = spearman_rankings_topk(ranking_var,   ranking_real, TOP_K)
                 
                 overlap_naive = _topk_overlap(ranking_naive, ranking_real, TOP_K)
                 overlap_pu    = _topk_overlap(ranking, ranking_real, TOP_K)
@@ -101,10 +101,12 @@ def _sweep_alpha(X, y, feature_names, estimation_method):
                     "alpha_hat": float(alpha_hat),
                     "overlap_naive": int(overlap_naive),
                     "overlap_pu": float(overlap_pu),
-                    "spearman_naive": float(spearman_naive),
-                    "spearman_pu": float(spearman_pu),
-                    "spearman_var": float(spearman_var),
-                    "spearman_real": float(spearman_real),
+                    "spearman_naive_full": float(spearman_naive_full),
+                    "spearman_pu_full": float(spearman_pu_full),
+                    "spearman_var_full": float(spearman_var_full),
+                    "spearman_naive_topk": float(spearman_naive_topk),
+                    "spearman_pu_topk": float(spearman_pu_topk),
+                    "spearman_var_topk": float(spearman_var_topk),
                     "auc_PU_corregido": float(aucs["PU_corregido"]),
                     "auc_MI_naive": float(aucs["MI_naive"]),
                     "auc_MI_real": float(aucs["MI_real"]),
@@ -118,9 +120,12 @@ def _sweep_alpha(X, y, feature_names, estimation_method):
             mean_alpha_hat = np.mean([r['alpha_hat'] for r in fold_results])
             mean_overlap_pu = np.mean([r['overlap_pu'] for r in fold_results])
             mean_overlap_naive = np.mean([r['overlap_naive'] for r in fold_results])
-            mean_spearman_pu = np.mean([r['spearman_pu'] for r in fold_results])
-            mean_spearman_naive = np.mean([r['spearman_naive'] for r in fold_results])
-            mean_spearman_var = np.mean([r['spearman_var'] for r in fold_results])
+            mean_spearman_pu_full = np.mean([r['spearman_pu_full'] for r in fold_results])
+            mean_spearman_naive_full = np.mean([r['spearman_naive_full'] for r in fold_results])
+            mean_spearman_var_full = np.mean([r['spearman_var_full'] for r in fold_results])
+            mean_spearman_pu_topk = np.mean([r['spearman_pu_topk'] for r in fold_results])
+            mean_spearman_naive_topk = np.mean([r['spearman_naive_topk'] for r in fold_results])
+            mean_spearman_var_topk = np.mean([r['spearman_var_topk'] for r in fold_results])
             mean_auc_pu = np.mean([r['auc_PU_corregido'] for r in fold_results])
             mean_auc_naive = np.mean([r['auc_MI_naive'] for r in fold_results])
             mean_auc_real = np.mean([r['auc_MI_real'] for r in fold_results])
@@ -139,10 +144,12 @@ def _sweep_alpha(X, y, feature_names, estimation_method):
                 "alpha_hat":          float(mean_alpha_hat),
                 "overlap_naive":      int(mean_overlap_naive),
                 "overlap_pu":         float(mean_overlap_pu),
-                "spearman_naive":     float(mean_spearman_naive),
-                "spearman_pu":        float(mean_spearman_pu),
-                "spearman_var":       float(mean_spearman_var),
-                "spearman_real":      1.0,
+                "spearman_naive_full": float(mean_spearman_naive_full),
+                "spearman_pu_full": float(mean_spearman_pu_full),
+                "spearman_var_full": float(mean_spearman_var_full),
+                "spearman_naive_topk": float(mean_spearman_naive_topk),
+                "spearman_pu_topk": float(mean_spearman_pu_topk),
+                "spearman_var_topk": float(mean_spearman_var_topk),
                 "auc_PU_corregido":   float(mean_auc_pu),
                 "auc_MI_naive":       float(mean_auc_naive),
                 "auc_MI_real":        float(mean_auc_real),
@@ -152,20 +159,32 @@ def _sweep_alpha(X, y, feature_names, estimation_method):
     # Guardar y procesar resultados
     df = pd.DataFrame(rows)
     summary = df.groupby('alpha_true').agg(
-        alpha_hat_mean=      ('alpha_hat',      'mean'),
-        alpha_hat_std=       ('alpha_hat',      'std'),
-        overlap_naive_mean=  ('overlap_naive',  'mean'),
-        overlap_naive_std=   ('overlap_naive',  'std'),
-        overlap_pu_mean=     ('overlap_pu',     'mean'),
-        overlap_pu_std=      ('overlap_pu',     'std'),
-        spearman_naive_mean= ('spearman_naive', 'mean'),
-        spearman_naive_std=  ('spearman_naive', 'std'),
-        spearman_pu_mean=    ('spearman_pu',    'mean'),
-        spearman_pu_std=     ('spearman_pu',    'std'),
-        spearman_var_mean=   ('spearman_var',   'mean'),
-        spearman_var_std=    ('spearman_var',   'std'),
-        spearman_real_mean=  ('spearman_real',  'mean'),
-        spearman_real_std=   ('spearman_real',  'std'),
+        alpha_hat_mean=        ('alpha_hat',        'mean'),
+        alpha_hat_std=         ('alpha_hat',        'std'),
+        overlap_naive_mean=    ('overlap_naive',    'mean'),
+        overlap_naive_std=     ('overlap_naive',    'std'),
+        overlap_pu_mean=       ('overlap_pu',       'mean'),
+        overlap_pu_std=        ('overlap_pu',       'std'),
+        auc_PU_corregido_mean= ('auc_PU_corregido', 'mean'),
+        auc_PU_corregido_std=  ('auc_PU_corregido', 'std'),
+        auc_MI_naive_mean=     ('auc_MI_naive',     'mean'),
+        auc_MI_naive_std=      ('auc_MI_naive',     'std'),
+        auc_MI_real_mean=      ('auc_MI_real',      'mean'),
+        auc_MI_real_std=       ('auc_MI_real',      'std'),
+        auc_Varianza_mean=     ('auc_Varianza',     'mean'),
+        auc_Varianza_std=      ('auc_Varianza',     'std'),
+        spearman_naive_full_mean= ('spearman_naive_full', 'mean'),
+        spearman_naive_full_std=  ('spearman_naive_full', 'std'),
+        spearman_pu_full_mean=    ('spearman_pu_full',    'mean'),
+        spearman_pu_full_std=     ('spearman_pu_full',    'std'),
+        spearman_var_full_mean=   ('spearman_var_full',   'mean'),
+        spearman_var_full_std=    ('spearman_var_full',   'std'),
+        spearman_naive_topk_mean= ('spearman_naive_topk', 'mean'),
+        spearman_naive_topk_std=  ('spearman_naive_topk', 'std'),
+        spearman_pu_topk_mean=    ('spearman_pu_topk',    'mean'),
+        spearman_pu_topk_std=     ('spearman_pu_topk',    'std'),
+        spearman_var_topk_mean=   ('spearman_var_topk',   'mean'),
+        spearman_var_topk_std=    ('spearman_var_topk',   'std'),
     ).reset_index()
     
     stability_rows = []
@@ -180,15 +199,35 @@ def _sweep_alpha(X, y, feature_names, estimation_method):
     stability_df = pd.DataFrame(stability_rows)
     summary = summary.merge(stability_df, on='alpha_true')
     
-    df.to_csv('alpha_sweep_runs.csv',    index=False)
-    summary.to_csv('alpha_sweep_summary.csv', index=False)
-    
+    summary_cols = [
+        'alpha_true',
+        'alpha_hat_mean', 'alpha_hat_std',
+        'spearman_pu_topk_mean', 'spearman_pu_topk_std',
+        'spearman_naive_topk_mean', 'spearman_naive_topk_std',
+        'spearman_var_topk_mean', 'spearman_var_topk_std',
+        'stability_pu', 'stability_naive', 'stability_real', 'stability_var',
+    ]
+    auc_cols = [
+        'alpha_true',
+        'auc_PU_corregido_mean', 'auc_PU_corregido_std',
+        'auc_MI_naive_mean', 'auc_MI_naive_std',
+        'auc_MI_real_mean', 'auc_MI_real_std',
+        'auc_Varianza_mean', 'auc_Varianza_std',
+    ]
+
+    df.to_csv(os.path.join(output_dir, 'alpha_sweep_runs.csv'), index=False)
+    summary[summary_cols].to_csv(os.path.join(output_dir, 'alpha_sweep_summary.csv'), index=False)
+    summary[auc_cols].to_csv(os.path.join(output_dir, 'auc_summary.csv'), index=False)
+
     mlflow.log_param('sweep_alphas', str(alphas))
     mlflow.log_param('sweep_seeds',  str(seeds))
     mlflow.log_param('n_runs',       int(len(rows)))
-    
-    mlflow.log_artifact('alpha_sweep_runs.csv')
-    mlflow.log_artifact('alpha_sweep_summary.csv')
+    if estimation_method == 'robust':
+        mlflow.log_param('alpha_top_q_percent', ALPHA_TOP_Q_PERCENT)
+
+    mlflow.log_artifact(os.path.join(output_dir, 'alpha_sweep_runs.csv'))
+    mlflow.log_artifact(os.path.join(output_dir, 'alpha_sweep_summary.csv'))
+    mlflow.log_artifact(os.path.join(output_dir, 'auc_summary.csv'))
     
     for _, row in summary.iterrows():
         a = row['alpha_true']
@@ -196,8 +235,10 @@ def _sweep_alpha(X, y, feature_names, estimation_method):
         mlflow.log_metric(f'alpha_{a}_hat_std',              float(row['alpha_hat_std']))
         mlflow.log_metric(f'alpha_{a}_overlap_naive_mean',   float(row['overlap_naive_mean']))
         mlflow.log_metric(f'alpha_{a}_overlap_pu_mean',      float(row['overlap_pu_mean']))
-        mlflow.log_metric(f'alpha_{a}_spearman_naive_mean',  float(row['spearman_naive_mean']))
-        mlflow.log_metric(f'alpha_{a}_spearman_pu_mean',     float(row['spearman_pu_mean']))
+        mlflow.log_metric(f'alpha_{a}_spearman_naive_full_mean',  float(row['spearman_naive_full_mean']))
+        mlflow.log_metric(f'alpha_{a}_spearman_naive_topk_mean',  float(row['spearman_naive_topk_mean']))
+        mlflow.log_metric(f'alpha_{a}_spearman_pu_full_mean',     float(row['spearman_pu_full_mean']))
+        mlflow.log_metric(f'alpha_{a}_spearman_pu_topk_mean',     float(row['spearman_pu_topk_mean']))
         mlflow.log_metric(f'alpha_{a}_stability_pu',         float(row['stability_pu']))
         mlflow.log_metric(f'alpha_{a}_stability_naive',      float(row['stability_naive']))
     
@@ -219,34 +260,69 @@ def _sweep_alpha(X, y, feature_names, estimation_method):
     ax.legend()
     ax.grid(True, linestyle='--', alpha=0.5)
     fig.tight_layout()
-    fig.savefig('auc_vs_alpha.png', dpi=150)
+    fig.savefig(os.path.join(output_dir, 'auc_vs_alpha.png'), dpi=150)
     plt.close(fig)
-    mlflow.log_artifact('auc_vs_alpha.png')
+    mlflow.log_artifact(os.path.join(output_dir, 'auc_vs_alpha.png'))
     
-    # Gráfico 2: Spearman vs alpha
-    fig2, ax2 = plt.subplots(figsize=(8, 5))
+    # Gráfico 2: Spearman vs Alpha (FULL y TOP-K comparadas)
+    fig2, (ax2_full, ax2_topk) = plt.subplots(1, 2, figsize=(14, 5))
+    
+    # Definir colores para cada método
+    colores = {
+        'PU_corregido': '#FF8C42',     # Naranja
+        'MI_naive': '#2ECC71',          # Verde
+        'Varianza': '#E74C3C',          # Rojo
+        'MI_real': '#3498DB',           # Azul
+    }
+    
+    # Gráfico 2a: Spearman FULL (todas las características)
     for label, col_mean, col_std in [
-        ('MI_real (ref.)', 'spearman_real_mean',  'spearman_real_std'),
-        ('PU_corregido',   'spearman_pu_mean',    'spearman_pu_std'),
-        ('MI_naive',       'spearman_naive_mean', 'spearman_naive_std'),
-        ('Varianza',       'spearman_var_mean',   'spearman_var_std'),
+        ('PU_corregido',   'spearman_pu_full_mean',    'spearman_pu_full_std'),
+        ('MI_naive',       'spearman_naive_full_mean', 'spearman_naive_full_std'),
+        ('Varianza',       'spearman_var_full_mean',   'spearman_var_full_std'),
     ]:
         means = summary[col_mean].values
         stds  = summary[col_std].values
         x     = summary['alpha_true'].values
-        ax2.plot(x, means, marker='o', label=label)
-        ax2.fill_between(x, means - stds, means + stds, alpha=0.15)
+        ax2_full.plot(x, means, marker='o', label=label, color=colores[label], linewidth=2)
+        ax2_full.fill_between(x, means - stds, means + stds, alpha=0.15, color=colores[label])
     
-    ax2.set_xlabel('Alpha verdadero')
-    ax2.set_ylabel('Correlación de Spearman con MI_real')
-    ax2.set_title('Correlación de Spearman vs Alpha')
-    ax2.set_ylim(0, 1)
-    ax2.legend()
-    ax2.grid(True, linestyle='--', alpha=0.5)
+    # Línea de referencia: MI_real siempre tiene Spearman=1.0
+    ax2_full.axhline(y=1.0, color=colores['MI_real'], linestyle='--', linewidth=2, label='MI_real (ref.)', alpha=0.7)
+    
+    ax2_full.set_xlabel('Alpha verdadero')
+    ax2_full.set_ylabel('Correlación de Spearman')
+    ax2_full.set_title(f'Spearman FULL')
+    ax2_full.set_ylim(0, 1)
+    ax2_full.legend()
+    ax2_full.grid(True, linestyle='--', alpha=0.5)
+    
+    # Gráfico 2b: Spearman TOP-K (solo características relevantes)
+    for label, col_mean, col_std in [
+        ('PU_corregido',   'spearman_pu_topk_mean',    'spearman_pu_topk_std'),
+        ('MI_naive',       'spearman_naive_topk_mean', 'spearman_naive_topk_std'),
+        ('Varianza',       'spearman_var_topk_mean',   'spearman_var_topk_std'),
+    ]:
+        means = summary[col_mean].values
+        stds  = summary[col_std].values
+        x     = summary['alpha_true'].values
+        ax2_topk.plot(x, means, marker='s', label=label, color=colores[label], linewidth=2)
+        ax2_topk.fill_between(x, means - stds, means + stds, alpha=0.15, color=colores[label])
+    
+    # Línea de referencia: MI_real siempre tiene Spearman=1.0
+    ax2_topk.axhline(y=1.0, color=colores['MI_real'], linestyle='--', linewidth=2, label='MI_real (ref.)', alpha=0.7)
+    
+    ax2_topk.set_xlabel('Alpha verdadero')
+    ax2_topk.set_ylabel('Correlación de Spearman')
+    ax2_topk.set_title(f'Spearman TOP-{TOP_K}')
+    ax2_topk.set_ylim(0, 1)
+    ax2_topk.legend()
+    ax2_topk.grid(True, linestyle='--', alpha=0.5)
+    
     fig2.tight_layout()
-    fig2.savefig('spearman_vs_alpha.png', dpi=150)
+    fig2.savefig(os.path.join(output_dir, 'spearman_vs_alpha.png'), dpi=150)
     plt.close(fig2)
-    mlflow.log_artifact('spearman_vs_alpha.png')
+    mlflow.log_artifact(os.path.join(output_dir, 'spearman_vs_alpha.png'))
     
     # Gráfico 3: Estabilidad vs alpha
     fig3, ax3 = plt.subplots(figsize=(8, 5))
@@ -266,117 +342,174 @@ def _sweep_alpha(X, y, feature_names, estimation_method):
     ax3.legend()
     ax3.grid(True, linestyle='--', alpha=0.5)
     fig3.tight_layout()
-    fig3.savefig('stability_vs_alpha.png', dpi=150)
+    fig3.savefig(os.path.join(output_dir, 'stability_vs_alpha.png'), dpi=150)
     plt.close(fig3)
-    mlflow.log_artifact('stability_vs_alpha.png')
+    mlflow.log_artifact(os.path.join(output_dir, 'stability_vs_alpha.png'))
     
     print('\nAlpha sweep - runs saved to alpha_sweep_runs.csv')
     print('Summary saved to alpha_sweep_summary.csv\n')
     print(summary.to_string(index=False))
 
 
-def _sweep_percent(X, y, feature_names, estimation_method):
-    """Sweep variando top_q_percent con método 'robust' (varía el percentil usado para estimar alpha).
-    
-    FLUJO CORRECTO:
-    - alpha_hat varía según top_q_percent
-    - p_y se estima a partir de alpha_hat
-    - ranking_pu se calcula a partir de p_y (no del oráculo)
-    - features seleccionado varían según ranking_pu
-    - AUC y Spearman se calculan sobre features variables
+def _sweep_percent(X, y, feature_names, estimation_method, dataset_kind, output_dir):
+    """Sweep variando top_q_percent con método 'robust'.
+
+    Pipeline idéntico a _sweep_alpha:
+    - PU model + alpha_hat + p_y calculados sobre datos completos (antes del KFold)
+    - KFold: dentro de cada fold se calculan los 4 rankings sobre X_train
+    - comparar_metodos evalúa AUC de los 4 métodos sobre X_test
     """
     print(f"\n{'='*70}")
     print("EJECUTANDO SWEEP DE TOP_Q_PERCENT")
     print(f"{'='*70}")
-    
+
     top_q_percents = TOP_Q_PERCENT_VALUES
     seeds = SWEEP_SEEDS
     alpha_true = ALPHA_TRUE
-    
+
     rows = []
-    
+
     for top_q_percent in top_q_percents:
         for seed in seeds:
             X_noisy = añadir_ruido_gaussiano(X, NOISE_LEVEL, random_state=seed)
             S = generar_etiquetas_pu(y, alpha_true, random_state=seed)
-            
-            X_train, X_test, y_train, y_test, S_train, S_test = train_test_split(
-                X_noisy, y, S, test_size=0.3, random_state=seed, stratify=y
-            )
-            
-            modelo = entrenar_clasificador_pu(X_train, S_train, random_state=seed)
-            scores_train = obtener_scores(modelo, X_train)
-            
-            # Estimar alpha con percentil variable
-            alpha_hat = estimar_alpha_robusto(scores_train, S_train, top_q_percent=top_q_percent)
-            
-            # Estimar p_y con alpha estimado
-            p_y = estimar_probabilidad_real(scores_train, alpha_hat)
-            
-            # Calcular ranking PU CORREGIDO (no oráculo) basado en p_y estimada
-            mi_scores_pu, ranking_pu = calcular_mi_ranking(
-                X_train, p_y, metodo="regresion", random_state=seed
-            )
-            
-            # Calcular ranking oráculo para comparación
-            mi_scores_real, ranking_real = calcular_mi_real(X_train, y_train)
-            
-            # Seleccionar features TOP_K usando ranking PU corregido (variable)
-            top_k_features = ranking_pu[:TOP_K]
-            
-            X_test_selected = X_test[:, top_k_features]
-            X_train_selected = X_train[:, top_k_features]
-            
-            # Evaluar AUC con features variables
-            scaler = StandardScaler()
-            X_train_scaled = scaler.fit_transform(X_train_selected)
-            X_test_scaled = scaler.transform(X_test_selected)
-            
-            lr = LogisticRegression(random_state=seed, max_iter=5000)
-            lr.fit(X_train_scaled, y_train)
-            auc = roc_auc_score(y_test, lr.predict_proba(X_test_scaled)[:, 1])
-            
-            # Calcular Spearman entre ranking PU y ranking real
-            spearman_corr, _ = spearmanr(ranking_pu, ranking_real)
-            
+
+            # Modelo PU y alpha estimados sobre datos completos (único valor por seed/top_q_percent)
+            modelo = entrenar_clasificador_pu(X_noisy, S, random_state=seed)
+            scores = obtener_scores(modelo, X_noisy)
+            alpha_hat = estimar_alpha_robusto(scores, S, top_q_percent=top_q_percent)
+            p_y = estimar_probabilidad_real(scores, alpha_hat)
+
+            kfold = crear_splitter_cv(dataset_kind, n_splits=5, random_state=seed)
+            fold_results = []
+
+            for fold_idx, (train_idx, test_idx) in enumerate(kfold.split(X_noisy, y)):
+                X_train = X_noisy[train_idx]
+                X_test  = X_noisy[test_idx]
+                y_train = y[train_idx]
+                y_test  = y[test_idx]
+                S_train = S[train_idx]
+                p_y_train = p_y[train_idx]
+
+                # 4 rankings calculados exclusivamente sobre X_train
+                mi_scores_pu,    ranking_pu    = calcular_mi_ranking(X_train, p_y_train, metodo="regresion", random_state=seed)
+                mi_naive_scores, ranking_naive = calcular_mi_naive(X_train, S_train)
+                mi_real_scores,  ranking_real  = calcular_mi_real(X_train, y_train)
+                var_scores,      ranking_var   = calcular_varianza(X_train)
+
+                aucs = comparar_metodos(
+                    X_train, X_test, y_train, y_test,
+                    ranking_pu, ranking_naive, ranking_real, ranking_var, k=TOP_K
+                )
+
+                spearman_pu_full    = spearman_rankings(ranking_pu,    ranking_real)
+                spearman_naive_full = spearman_rankings(ranking_naive, ranking_real)
+                spearman_var_full   = spearman_rankings(ranking_var,   ranking_real)
+
+                spearman_pu_topk    = spearman_rankings_topk(ranking_pu,    ranking_real, TOP_K)
+                spearman_naive_topk = spearman_rankings_topk(ranking_naive, ranking_real, TOP_K)
+                spearman_var_topk   = spearman_rankings_topk(ranking_var,   ranking_real, TOP_K)
+
+                fold_results.append({
+                    "auc_PU_corregido":    float(aucs["PU_corregido"]),
+                    "auc_MI_naive":        float(aucs["MI_naive"]),
+                    "auc_MI_real":         float(aucs["MI_real"]),
+                    "auc_Varianza":        float(aucs["Varianza"]),
+                    "spearman_pu_full":    float(spearman_pu_full),
+                    "spearman_naive_full": float(spearman_naive_full),
+                    "spearman_var_full":   float(spearman_var_full),
+                    "spearman_pu_topk":    float(spearman_pu_topk),
+                    "spearman_naive_topk": float(spearman_naive_topk),
+                    "spearman_var_topk":   float(spearman_var_topk),
+                })
+
             rows.append({
-                "top_q_percent": top_q_percent,
-                "seed": seed,
-                "alpha_hat": float(alpha_hat),
-                "alpha_true": alpha_true,
-                "auc": float(auc),
-                "spearman": float(spearman_corr),
+                "top_q_percent":       top_q_percent,
+                "seed":                seed,
+                "alpha_true":          alpha_true,
+                "alpha_hat":           float(alpha_hat),
+                "auc_PU_corregido":    float(np.mean([r["auc_PU_corregido"]    for r in fold_results])),
+                "auc_MI_naive":        float(np.mean([r["auc_MI_naive"]        for r in fold_results])),
+                "auc_MI_real":         float(np.mean([r["auc_MI_real"]         for r in fold_results])),
+                "auc_Varianza":        float(np.mean([r["auc_Varianza"]        for r in fold_results])),
+                "spearman_pu_full":    float(np.mean([r["spearman_pu_full"]    for r in fold_results])),
+                "spearman_naive_full": float(np.mean([r["spearman_naive_full"] for r in fold_results])),
+                "spearman_var_full":   float(np.mean([r["spearman_var_full"]   for r in fold_results])),
+                "spearman_pu_topk":    float(np.mean([r["spearman_pu_topk"]    for r in fold_results])),
+                "spearman_naive_topk": float(np.mean([r["spearman_naive_topk"] for r in fold_results])),
+                "spearman_var_topk":   float(np.mean([r["spearman_var_topk"]   for r in fold_results])),
             })
-    
-    # Guardar y procesar resultados
+
     df = pd.DataFrame(rows)
-    df.to_csv('top_q_percent_sweep_runs.csv', index=False)
-    
-    summary = df.groupby('top_q_percent').agg({
-        'alpha_hat': ['mean', 'std'],
-        'auc': ['mean', 'std'],
-        'spearman': ['mean', 'std'],
-    }).reset_index()
-    summary.columns = ['top_q_percent', 'alpha_hat_mean', 'alpha_hat_std', 
-                       'auc_mean', 'auc_std', 'spearman_mean', 'spearman_std']
-    summary.to_csv('top_q_percent_sweep_summary.csv', index=False)
-    
-    mlflow.log_param("dataset", DATASET)
-    mlflow.log_param("alpha_true", alpha_true)
+    df.to_csv(os.path.join(output_dir, 'top_q_percent_sweep_runs.csv'), index=False)
+
+    # Summary: alpha_hat, AUCs y Spearman top-k agrupados por top_q_percent
+    metodos = ['PU_corregido', 'MI_naive', 'MI_real', 'Varianza']
+    summary_rows = []
+    for q in top_q_percents:
+        subset = df[df['top_q_percent'] == q]
+        row = {
+            'top_q_percent':   q,
+            'alpha_hat_mean':  float(subset['alpha_hat'].mean()),
+            'alpha_hat_std':   float(subset['alpha_hat'].std()),
+        }
+        for m in metodos:
+            row[f'auc_{m}_mean'] = float(subset[f'auc_{m}'].mean())
+            row[f'auc_{m}_std']  = float(subset[f'auc_{m}'].std())
+        for col in ['spearman_pu_topk', 'spearman_naive_topk', 'spearman_var_topk']:
+            row[f'{col}_mean'] = float(subset[col].mean())
+            row[f'{col}_std']  = float(subset[col].std())
+        summary_rows.append(row)
+    summary = pd.DataFrame(summary_rows)
+
+    summary_cols = ['top_q_percent', 'alpha_hat_mean', 'alpha_hat_std',
+                    'spearman_pu_topk_mean', 'spearman_pu_topk_std',
+                    'spearman_naive_topk_mean', 'spearman_naive_topk_std',
+                    'spearman_var_topk_mean', 'spearman_var_topk_std']
+    auc_cols = ['top_q_percent'] + [c for m in metodos for c in (f'auc_{m}_mean', f'auc_{m}_std')]
+
+    summary[summary_cols].to_csv(os.path.join(output_dir, 'top_q_percent_sweep_summary.csv'), index=False)
+    summary[auc_cols].to_csv(os.path.join(output_dir, 'auc_summary.csv'), index=False)
+
+    mlflow.log_param("dataset",                 DATASET)
+    mlflow.log_param("alpha_true",              alpha_true)
     mlflow.log_param("alpha_estimation_method", estimation_method)
-    mlflow.log_param("top_k_features", TOP_K)
-    mlflow.log_param("top_q_percents", str(top_q_percents))
-    mlflow.log_param("seeds", str(list(seeds)))
-    mlflow.log_param("n_runs", len(rows))
-    
-    # Gráficas 2x2
-    fig, axes = plt.subplots(2, 2, figsize=(14, 10))
+    mlflow.log_param("top_k_features",          TOP_K)
+    mlflow.log_param("top_q_percents",          str(top_q_percents))
+    mlflow.log_param("seeds",                   str(list(seeds)))
+    mlflow.log_param("n_runs",                  len(rows))
+
+    for _, row in summary.iterrows():
+        q = int(row['top_q_percent'])
+        mlflow.log_metric(f"top_q_{q}_alpha_hat_mean",           float(row['alpha_hat_mean']))
+        mlflow.log_metric(f"top_q_{q}_alpha_hat_std",            float(row['alpha_hat_std']))
+        mlflow.log_metric(f"top_q_{q}_error_alpha_rel",          float(np.abs(row['alpha_hat_mean'] - alpha_true) / alpha_true * 100))
+        for m in metodos:
+            mlflow.log_metric(f"top_q_{q}_auc_{m}_mean",         float(row[f'auc_{m}_mean']))
+            mlflow.log_metric(f"top_q_{q}_auc_{m}_std",          float(row[f'auc_{m}_std']))
+        mlflow.log_metric(f"top_q_{q}_spearman_pu_topk_mean",    float(row['spearman_pu_topk_mean']))
+        mlflow.log_metric(f"top_q_{q}_spearman_naive_topk_mean", float(row['spearman_naive_topk_mean']))
+        mlflow.log_metric(f"top_q_{q}_spearman_var_topk_mean",   float(row['spearman_var_topk_mean']))
+
+    mlflow.log_artifact(os.path.join(output_dir, 'top_q_percent_sweep_runs.csv'))
+    mlflow.log_artifact(os.path.join(output_dir, 'top_q_percent_sweep_summary.csv'))
+    mlflow.log_artifact(os.path.join(output_dir, 'auc_summary.csv'))
+
+    # Colores consistentes con _sweep_alpha
+    colores = {
+        'PU_corregido': '#FF8C42',
+        'MI_naive':     '#2ECC71',
+        'Varianza':     '#E74C3C',
+        'MI_real':      '#3498DB',
+    }
     x = summary['top_q_percent'].values
-    
+
+    fig, axes = plt.subplots(2, 2, figsize=(14, 10))
+
     # Gráfico 1: Alpha estimado vs Top Q Percent
     ax = axes[0, 0]
     ax.plot(x, summary['alpha_hat_mean'].values, marker='o', linewidth=2, markersize=8, color='blue')
-    ax.fill_between(x, 
+    ax.fill_between(x,
                     summary['alpha_hat_mean'].values - summary['alpha_hat_std'].values,
                     summary['alpha_hat_mean'].values + summary['alpha_hat_std'].values,
                     alpha=0.2, color='blue')
@@ -384,74 +517,69 @@ def _sweep_percent(X, y, feature_names, estimation_method):
     ax.set_xlabel('Top Q Percent (%)', fontsize=11)
     ax.set_ylabel('Alpha Estimado', fontsize=11)
     ax.set_title('Alpha Estimado vs Top Q Percent', fontsize=12, fontweight='bold')
-    ax.grid(True, alpha=0.3)
     ax.legend()
+    ax.grid(True, alpha=0.3)
     ax.set_xticks(top_q_percents)
-    
-    # Gráfico 2: AUC vs Top Q Percent (AHORA VARÍA porque features varían)
+
+    # Gráfico 2: AUC vs Top Q Percent (4 métodos)
     ax = axes[0, 1]
-    ax.plot(x, summary['auc_mean'].values, marker='s', linewidth=2, markersize=8, color='green')
-    ax.fill_between(x,
-                    summary['auc_mean'].values - summary['auc_std'].values,
-                    summary['auc_mean'].values + summary['auc_std'].values,
-                    alpha=0.2, color='green')
+    for metodo in metodos:
+        means = summary[f'auc_{metodo}_mean'].values
+        stds  = summary[f'auc_{metodo}_std'].values
+        ax.plot(x, means, marker='o', label=metodo, color=colores[metodo], linewidth=2)
+        ax.fill_between(x, means - stds, means + stds, alpha=0.15, color=colores[metodo])
     ax.set_xlabel('Top Q Percent (%)', fontsize=11)
-    ax.set_ylabel(f'AUC (top-{TOP_K} features PU_corregido)', fontsize=11)
-    ax.set_title('AUC vs Top Q Percent (features variables)', fontsize=12, fontweight='bold')
+    ax.set_ylabel(f'AUC (top-{TOP_K} features)', fontsize=11)
+    ax.set_title('AUC vs Top Q Percent por método', fontsize=12, fontweight='bold')
+    ax.legend()
     ax.grid(True, alpha=0.3)
     ax.set_xticks(top_q_percents)
-    
-    # Gráfico 3: Spearman vs Top Q Percent (Correlación ranking PU vs Real)
+
+    # Gráfico 3: Spearman FULL vs Top Q Percent (3 métodos, calculado del df completo)
     ax = axes[1, 0]
-    ax.plot(x, summary['spearman_mean'].values, marker='^', linewidth=2, markersize=8, color='purple')
-    ax.fill_between(x,
-                    summary['spearman_mean'].values - summary['spearman_std'].values,
-                    summary['spearman_mean'].values + summary['spearman_std'].values,
-                    alpha=0.2, color='purple')
+    for label, col in [
+        ('PU_corregido', 'spearman_pu_full'),
+        ('MI_naive',     'spearman_naive_full'),
+        ('Varianza',     'spearman_var_full'),
+    ]:
+        means = df.groupby('top_q_percent')[col].mean().values
+        stds  = df.groupby('top_q_percent')[col].std().values
+        ax.plot(x, means, marker='o', label=label, color=colores[label], linewidth=2)
+        ax.fill_between(x, means - stds, means + stds, alpha=0.15, color=colores[label])
+    ax.axhline(y=1.0, color=colores['MI_real'], linestyle='--', linewidth=2, label='MI_real (ref.)', alpha=0.7)
     ax.set_xlabel('Top Q Percent (%)', fontsize=11)
-    ax.set_ylabel('Spearman (ranking PU vs Real)', fontsize=11)
-    ax.set_title('Correlación vs Top Q Percent (rankings variables)', fontsize=12, fontweight='bold')
+    ax.set_ylabel('Correlación de Spearman', fontsize=11)
+    ax.set_title('Spearman FULL vs Top Q Percent', fontsize=12, fontweight='bold')
+    ax.set_ylim(0, 1)
+    ax.legend()
     ax.grid(True, alpha=0.3)
     ax.set_xticks(top_q_percents)
-    
-    # Gráfico 4: Error relativo de alpha
+
+    # Gráfico 4: Spearman TOP-K vs Top Q Percent (3 métodos)
     ax = axes[1, 1]
-    error_alpha = np.abs(summary['alpha_hat_mean'].values - alpha_true) / alpha_true * 100
-    ax.bar(x, error_alpha, width=2, color='orange', alpha=0.7, edgecolor='black')
+    for label, col_mean, col_std in [
+        ('PU_corregido', 'spearman_pu_topk_mean',    'spearman_pu_topk_std'),
+        ('MI_naive',     'spearman_naive_topk_mean',  'spearman_naive_topk_std'),
+        ('Varianza',     'spearman_var_topk_mean',    'spearman_var_topk_std'),
+    ]:
+        means = summary[col_mean].values
+        stds  = summary[col_std].values
+        ax.plot(x, means, marker='s', label=label, color=colores[label], linewidth=2)
+        ax.fill_between(x, means - stds, means + stds, alpha=0.15, color=colores[label])
+    ax.axhline(y=1.0, color=colores['MI_real'], linestyle='--', linewidth=2, label='MI_real (ref.)', alpha=0.7)
     ax.set_xlabel('Top Q Percent (%)', fontsize=11)
-    ax.set_ylabel('Error Relativo de Alpha (%)', fontsize=11)
-    ax.set_title('Error Relativo de Alpha vs Top Q Percent', fontsize=12, fontweight='bold')
-    ax.grid(True, alpha=0.3, axis='y')
+    ax.set_ylabel('Correlación de Spearman', fontsize=11)
+    ax.set_title(f'Spearman TOP-{TOP_K} vs Top Q Percent', fontsize=12, fontweight='bold')
+    ax.set_ylim(0, 1)
+    ax.legend()
+    ax.grid(True, alpha=0.3)
     ax.set_xticks(top_q_percents)
-    
-    plt.tight_layout()
-    plt.savefig('top_q_percent_sweep.png', dpi=150, bbox_inches='tight')
+
+    fig.tight_layout()
+    fig.savefig(os.path.join(output_dir, 'top_q_percent_sweep.png'), dpi=150, bbox_inches='tight')
     plt.close(fig)
-    
-    # Log de métricas
-    for _, row in summary.iterrows():
-        q = int(row['top_q_percent'])
-        alpha_mean = row['alpha_hat_mean']
-        alpha_std = row['alpha_hat_std']
-        auc_mean = row['auc_mean']
-        auc_std = row['auc_std']
-        spearman_mean = row['spearman_mean']
-        spearman_std = row['spearman_std']
-        error_alpha_rel = np.abs(alpha_mean - alpha_true) / alpha_true * 100
-        
-        mlflow.log_metric(f"top_q_{q}_alpha_hat_mean", float(alpha_mean))
-        mlflow.log_metric(f"top_q_{q}_alpha_hat_std", float(alpha_std))
-        mlflow.log_metric(f"top_q_{q}_auc_mean", float(auc_mean))
-        mlflow.log_metric(f"top_q_{q}_auc_std", float(auc_std))
-        mlflow.log_metric(f"top_q_{q}_spearman_mean", float(spearman_mean))
-        mlflow.log_metric(f"top_q_{q}_spearman_std", float(spearman_std))
-        mlflow.log_metric(f"top_q_{q}_error_alpha_rel", float(error_alpha_rel))
-    
-    # Log de artefactos
-    mlflow.log_artifact('top_q_percent_sweep_runs.csv')
-    mlflow.log_artifact('top_q_percent_sweep_summary.csv')
-    mlflow.log_artifact('top_q_percent_sweep.png')
-    
+    mlflow.log_artifact(os.path.join(output_dir, 'top_q_percent_sweep.png'))
+
     print("\n" + "="*70)
     print("RESUMEN DE ESTIMACIONES")
     print("="*70)
@@ -460,16 +588,22 @@ def _sweep_percent(X, y, feature_names, estimation_method):
     print(f"Alpha verdadero: {alpha_true}")
     print(f"Semillas: {len(seeds)}")
     print("="*70)
-    
-    print(f"\n{'Top_Q_%':<10} {'Alpha_Est':<12} {'Error_%':<12} {'AUC':<10} {'Spearman':<10}")
-    print("-"*54)
+
+    header = f"{'Top_Q_%':<10} {'Alpha_Est':<12} {'Error_%':<10} {'AUC_PU':<10} {'AUC_Naive':<11} {'AUC_Real':<10} {'AUC_Var':<10} {'Spear_PU_K':<12}"
+    print(f"\n{header}")
+    print("-"*85)
     for _, row in summary.iterrows():
         q = int(row['top_q_percent'])
         alpha_mean = row['alpha_hat_mean']
         error = np.abs(alpha_mean - alpha_true) / alpha_true * 100
-        auc = row['auc_mean']
-        spear = row['spearman_mean']
-        print(f"{q:<10} {alpha_mean:<12.4f} {error:<12.2f} {auc:<10.4f} {spear:<10.4f}")
+        print(
+            f"{q:<10} {alpha_mean:<12.4f} {error:<10.2f}"
+            f" {row['auc_PU_corregido_mean']:<10.4f}"
+            f" {row['auc_MI_naive_mean']:<11.4f}"
+            f" {row['auc_MI_real_mean']:<10.4f}"
+            f" {row['auc_Varianza_mean']:<10.4f}"
+            f" {row['spearman_pu_topk_mean']:<12.4f}"
+        )
 
 
 def main():
@@ -492,6 +626,9 @@ def main():
     # En modo single se itera una sola vez; en sweep se recorre según SWEEP_MODE
     alphas = SWEEP_ALPHAS if RUN_MODE == 'sweep' else [ALPHA_TRUE]
     seeds  = SWEEP_SEEDS  if RUN_MODE == 'sweep' else [RANDOM_STATE]
+
+    output_dir = os.path.join("resultados", DATASET, estimation_method)
+    os.makedirs(output_dir, exist_ok=True)
 
     client = MlflowClient()
     exp = client.get_experiment_by_name(EXPERIMENT_NAME)
@@ -517,24 +654,13 @@ def main():
         mlflow.log_param("n_negatives",    n_negatives)
         mlflow.log_param("class_balance",  class_balance)
 
-        # Estadísticas descriptivas de features
-        stats = pd.DataFrame({
-            "feature":  feature_names,
-            "mean":     np.mean(X, axis=0),
-            "std":      np.std(X, axis=0),
-            "min":      np.min(X, axis=0),
-            "max":      np.max(X, axis=0),
-            "median":   np.median(X, axis=0),
-        })
-        stats_path = "dataset_feature_stats.csv"
-        stats.to_csv(stats_path, index=False)
-        mlflow.log_artifact(stats_path)
-
         # Configuración general
         mlflow.log_param("run_mode",    RUN_MODE)
         mlflow.log_param("noise_level", NOISE_LEVEL)
         mlflow.log_param("top_k",       TOP_K)
         mlflow.log_param("alpha_estimation_method", estimation_method)
+        if estimation_method == 'robust':
+            mlflow.log_param("alpha_top_q_percent", ALPHA_TOP_Q_PERCENT)
         
         if RUN_MODE == 'single':
             mlflow.log_param("alpha_true", ALPHA_TRUE)
@@ -557,7 +683,7 @@ def main():
             mlflow.log_metric("alpha_estimated", float(alpha_hat))
 
             p_y = estimar_probabilidad_real(scores, alpha_hat)
-            kfold = StratifiedKFold(n_splits=3, shuffle=True, random_state=RANDOM_STATE)
+            kfold = crear_splitter_cv(ds_meta.get("kind", ""), n_splits=3, random_state=RANDOM_STATE)
             
             for fold_idx, (train_idx, test_idx) in enumerate(kfold.split(X_noisy, y)):
                 X_train = X_noisy[train_idx]
@@ -596,9 +722,9 @@ def main():
             mlflow.log_param("sweep_mode", SWEEP_MODE)
             
             if SWEEP_MODE == 'alpha':
-                _sweep_alpha(X, y, feature_names, estimation_method)
+                _sweep_alpha(X, y, feature_names, estimation_method, ds_meta.get("kind", ""), output_dir)
             elif SWEEP_MODE == 'percent':
-                _sweep_percent(X, y, feature_names, estimation_method)
+                _sweep_percent(X, y, feature_names, estimation_method, ds_meta.get("kind", ""), output_dir)
             else:
                 raise ValueError(f"SWEEP_MODE inválido: {SWEEP_MODE}. Debe ser 'alpha' o 'percent'")
 

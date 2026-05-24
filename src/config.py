@@ -11,7 +11,7 @@ SWEEP_MODE = 'alpha'  # 'alpha' o 'percent'
 #   - Libsvm: gas_sensor_drift
 #   - Microarray (GEO): colon_cancer, prostate_cancer, lung_cancer
 #   - MAT files: cns, dlbcl
-DATASET = "dlbcl"
+DATASET = "miniboone"
 
 # Opcional: fuerza la etiqueta considerada como positiva en datasets OpenML
 # (si es None, se usa el valor por defecto del registry en src/datasets.py)
@@ -24,12 +24,12 @@ GAS_POSITIVE_CLASS = 1
 ALPHA_TRUE = 0.2
 
 # Parámetros modo sweep alpha
-SWEEP_ALPHAS = [0.3, 0.2, 0.1]
-SWEEP_SEEDS = [0, 1, 2]
+SWEEP_ALPHAS = [0.5, 0.3, 0.2, 0.1, 0.05]
+SWEEP_SEEDS = [0, 1, 2, 3, 4]
 
 # Método de estimación de alpha
-ALPHA_ESTIMATION_METHOD = 'robust'  # 'mean' o 'robust'
-ALPHA_TOP_Q_PERCENT = 20  # percentil superior a considerar en método robusto
+ALPHA_ESTIMATION_METHOD = 'mean'  # 'mean' o 'robust'
+ALPHA_TOP_Q_PERCENT = 30  # percentil superior a considerar en método robusto
  
 # Parámetros modo sweep percent 
 TOP_Q_PERCENT_VALUES = [5, 20, 30, 50, 100]  # Porcentajes a evaluar (usado en modo 'sweep')
@@ -40,5 +40,5 @@ NOISE_LEVEL = 0
 # Parámetros generales
 TOP_K = 10  # Número de features top-K para evaluar overlap/AUC
 EXPERIMENT_NAME = DATASET
-RUN_NAME = "robust 3alphas (kfold 3) corregido"  # Nombre del run (cambia esto para diferenciar los runs en mlflow)
+RUN_NAME = "ALPHA TOP-10"  # Nombre del run (cambia esto para diferenciar los runs en mlflow)
 

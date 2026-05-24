@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from typing import Any, Dict, Optional, Tuple
 
 import numpy as np
+from sklearn.model_selection import RepeatedStratifiedKFold, StratifiedKFold
 
 
 @dataclass(frozen=True)
@@ -106,8 +107,24 @@ _DATASETS: Dict[str, DatasetSpec] = {
 }
 
 
+MICROARRAY_CV_N_SPLITS = 3
+MICROARRAY_CV_N_REPEATS = 10
+MICROARRAY_CV_RANDOM_STATE = 42
+
+
 def available_datasets() -> Tuple[str, ...]:
     return tuple(sorted(_DATASETS.keys()))
+
+
+def crear_splitter_cv(dataset_kind: str, n_splits: int, random_state: int):
+    if dataset_kind in {"microarray", "mat"}:
+        return RepeatedStratifiedKFold(
+            n_splits=MICROARRAY_CV_N_SPLITS,
+            n_repeats=MICROARRAY_CV_N_REPEATS,
+            random_state=MICROARRAY_CV_RANDOM_STATE,
+        )
+
+    return StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=random_state)
 
 
 def _download_dataset(dataset_key: str, cache_dir: str) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:

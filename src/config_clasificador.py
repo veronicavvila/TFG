@@ -15,11 +15,11 @@ assert DATASET in VALID_DATASETS, f"Dataset debe ser uno de: {VALID_DATASETS}"
 
                            
 # Parámetros generales
-N_SEEDS = [0, 1, 2, 3, 4]  
+N_SEEDS = [0, 1, 2]  
 ALPHAS = [0.5, 0.3, 0.2]
-N_KFOLDS = 3
+N_KFOLDS = 5
 NOISE_LEVEL = 0.0
-TOP_K = 10  # Número de features top-K para evaluar overlap/AUC
+TOP_K = 100  # Número de features top-K para evaluar overlap/AUC
 USE_FEATURE_SELECTION = True  # Usar selección de features basada en MI
 
 # Parámetros de PU
@@ -32,4 +32,4 @@ ALPHA_TOP_Q_PERCENT = 30  # percentil superior a considerar en método robusto
 
 # Mlflow
 EXPERIMENT_NAME = DATASET
-RUN_NAME = "mean comparativa_clasificadores sin dummy"
+RUN_NAME = "top 100 mean comparativa_clasificadores"
