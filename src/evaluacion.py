@@ -10,7 +10,6 @@ def evaluar_clasificador_final(X_train, X_test, y_train, y_test, ranking, k):
     """
     Entrena un clasificador final usando las top-k características (ranking calculado
     exclusivamente sobre train) y evalúa el AUC sobre test.
-    El split debe realizarse antes de llamar a esta función.
     """
     features_seleccionadas = ranking[:k]
 

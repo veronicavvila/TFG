@@ -9,11 +9,18 @@ from sklearn.model_selection import RepeatedStratifiedKFold, StratifiedKFold
 
 @dataclass(frozen=True)
 class DatasetSpec:
-    kind: str  # 'openml' | 'sklearn' | 'libsvm'
+    kind: str  # 'openml' | 'sklearn' | 'libsvm' | 'microarray' | 'mat' | 'synthetic'
     openml_name: Optional[str] = None
     openml_version: int = 1
     positive_label: Optional[Any] = None
     description: str = ""
+    # Parámetros exclusivos para kind='synthetic' (make_classification)
+    n_samples: int = 3000
+    n_features: int = 100
+    n_informative: int = 15
+    n_redundant: int = 5
+    class_sep: float = 1.5
+    weights: Optional[tuple] = None   # e.g. (0.65, 0.35) → 35% positivos
 
 
 _DATASETS: Dict[str, DatasetSpec] = {
@@ -90,6 +97,61 @@ _DATASETS: Dict[str, DatasetSpec] = {
         openml_name="lung_cancer",
         positive_label=1,
         description="Lung Cancer (Bhattacharjee et al. 2001) - ~181 samples, ~12000 genes (Adenocarcinoma vs Others)",
+    ),
+    # ── Feature-selection benchmarks ──────────────────────────────────────────
+    # Madelon: dataset del NIPS 2003 Feature Selection Challenge
+    #   2000 muestras, 500 features: 5 key + 15 redundantes + 480 ruido puro
+    #   Balance 50/50. Gold-standard para demostrar selección con señal dispersa.
+    "madelon": DatasetSpec(
+        kind="openml",
+        openml_name="madelon",
+        openml_version=1,
+        positive_label="2",
+        description="Madelon NIPS-2003 - 2000 muestras, 500 features (5 clave + 15 redundantes + 480 ruido)",
+    ),
+    # Waveform: señal basada en ondas + 19 features ruido puro
+    #   5000 muestras, 40 features: 21 basadas en onda + 19 random noise
+    #   3 clases → binarizado: clase 0 vs resto (≈33% positivo)
+    "waveform": DatasetSpec(
+        kind="openml",
+        openml_name="waveform-5000",
+        openml_version=1,
+        positive_label="0",
+        description="Waveform-5000 - 5000 muestras, 40 features (21 señal + 19 ruido), clase 0 vs resto",
+    ),
+    # Gisette: NIPS 2003 Feature Selection Challenge
+    #   ~7000 muestras, 5000 features: 2500 reales + 2500 probe (ruido puro inyectado por diseño)
+    #   Balance 50/50. Gold-standard para demostrar que naive falla con señal dispersa.
+    #   Tarea: separar dígito 4 (clase "1") vs dígito 9 (clase "2")
+    "gisette": DatasetSpec(
+        kind="openml",
+        openml_name="gisette",
+        openml_version=2,
+        positive_label="1",   # OpenML: 1=digito9 (positivo), -1=digito4 (negativo)
+        description="Gisette NIPS-2003 - ~7000 muestras, 5000 features (2500 reales + 2500 probe ruido), digito 9 vs 4",
+    ),
+    # ── Sintético controlado (make_classification) ────────────────────────────
+    # Garantiza los 3 comportamientos teóricos: naive falla, PU mejora, alpha converge
+    "synthetic_pu": DatasetSpec(
+        kind="synthetic",
+        description="Sintético PU - 3000 muestras, 100 features (10 informativas + 5 redundantes + 85 ruido)",
+        n_samples=3000,
+        n_features=100,
+        n_informative=10,   # era 15 → señal más dispersa, naive falla más
+        n_redundant=5,
+        class_sep=0.8,      # era 1.5 → rompe el efecto techo en AUC (~0.99→~0.94)
+        weights=(0.65, 0.35),
+    ),
+    # ── MUSK Version 1 ───────────────────────────────────────────────────────
+    # 476 conformaciones de 92 moléculas (47 musks + 45 non-musks), 166 features
+    # Features: descriptores físicos conformacionales (distancias, ángulos, cargas)
+    # Clase positiva: 1 (musk), negativa: 0 (non-musk)
+    # Origen: UCI ML Repository (descarga directa, ID=74)
+    # Formato: clean1.data.Z → 2 cols ID + 166 features numéricas + 1 clase (0/1)
+    "musk_v1": DatasetSpec(
+        kind="uci_musk",
+        positive_label=1,
+        description="MUSK v1 - 476 conformaciones, 166 features moleculares (musk=1 vs non-musk=0)",
     ),
     # Raw microarray MAT files
     "cns": DatasetSpec(
@@ -218,6 +280,123 @@ def _download_dataset(dataset_key: str, cache_dir: str) -> Tuple[np.ndarray, np.
 
 
 
+def _load_musk_v1() -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Descarga y carga MUSK Version 1 desde UCI ML Repository.
+
+    Formato del fichero clean1.data (después de descomprimir .Z con LZW):
+        molecule_name, conformation_name, feat_1, ..., feat_166, class
+        → columna 0:   nombre molécula   (descartada)
+        → columna 1:   nombre conformación (descartada)
+        → columnas 2–167: 166 features numéricas
+        → columna 168: clase (0 = non-musk, 1 = musk)
+
+    El fichero se descarga como ZIP desde UCI y el .Z interno se descomprime
+    con `unlzw3` (LZW puro Python). Si no está instalado se lanza un mensaje claro.
+
+    Caché local: data/musk_v1/clean1.csv (generado la primera vez)
+    """
+    import os
+    import zipfile
+    import io
+    import urllib.request
+
+    cache_dir = os.path.join("data", "musk_v1")
+    os.makedirs(cache_dir, exist_ok=True)
+    csv_cache = os.path.join(cache_dir, "clean1.csv")
+
+    # ── 1. Usar caché si ya existe ────────────────────────────────────────────
+    if os.path.exists(csv_cache):
+        import pandas as pd
+        df = pd.read_csv(csv_cache, header=None)
+    else:
+        # ── 2. Descargar ZIP desde UCI ────────────────────────────────────────
+        zip_url = "https://archive.ics.uci.edu/static/public/74/musk+version+1.zip"
+        zip_path = os.path.join(cache_dir, "musk_v1.zip")
+
+        if not os.path.exists(zip_path):
+            print("Descargando MUSK v1 desde UCI ML Repository...")
+            try:
+                urllib.request.urlretrieve(zip_url, zip_path)
+                print(f"  Descarga completada: {zip_path}")
+            except Exception as e:
+                raise RuntimeError(
+                    f"Error descargando MUSK v1:\n{e}\n"
+                    f"Descarga manual desde: {zip_url}\n"
+                    f"Guarda el ZIP en: {zip_path}"
+                )
+
+        # ── 3. Extraer clean1.data.Z del ZIP ─────────────────────────────────
+        with zipfile.ZipFile(zip_path, 'r') as zf:
+            # Buscar el fichero .Z dentro del ZIP
+            z_candidates = [n for n in zf.namelist() if n.endswith("clean1.data.Z")]
+            csv_candidates = [n for n in zf.namelist() if n.lower().endswith(".csv")]
+
+            if csv_candidates:
+                # Formato nuevo UCI (con CSV embebido)
+                import pandas as pd
+                with zf.open(csv_candidates[0]) as f:
+                    df = pd.read_csv(f, header=None)
+                df.to_csv(csv_cache, index=False, header=False)
+                print(f"  MUSK v1 cargado desde CSV embebido: {csv_candidates[0]}")
+
+            elif z_candidates:
+                # Formato clásico UCI: descomprimir .Z (LZW)
+                try:
+                    from unlzw3 import unlzw
+                except ImportError:
+                    raise ImportError(
+                        "El fichero MUSK v1 está en formato .Z (Unix compress/LZW).\n"
+                        "Instala el descompresor: pip install unlzw3\n"
+                        "Y vuelve a ejecutar."
+                    )
+                with zf.open(z_candidates[0]) as f:
+                    compressed_bytes = f.read()
+                raw_bytes = unlzw(compressed_bytes)
+                text = raw_bytes.decode("ascii")
+
+                import pandas as pd
+                df = pd.read_csv(io.StringIO(text), header=None)
+                df.to_csv(csv_cache, index=False, header=False)
+                print(f"  MUSK v1 descomprimido (.Z->CSV) y guardado en cache: {csv_cache}")
+
+            else:
+                available = zf.namelist()
+                raise RuntimeError(
+                    f"No se encontró clean1.data.Z ni CSV en el ZIP.\n"
+                    f"Ficheros disponibles: {available}"
+                )
+
+    # ── 4. Parsear: col0=mol_name, col1=conf_name, cols2-167=features, col168=class ─
+    import pandas as pd
+    if not isinstance(df, pd.DataFrame):
+        df = pd.read_csv(csv_cache, header=None)
+
+    # Sanidad: debería tener 169 columnas
+    if df.shape[1] not in (168, 169):
+        raise ValueError(
+            f"Se esperaban 168 o 169 columnas en MUSK v1, se encontraron {df.shape[1]}.\n"
+            f"Primeras columnas: {list(df.columns[:5])}\n"
+            f"Borra la caché en {cache_dir} y vuelve a intentarlo."
+        )
+
+    n_cols = df.shape[1]
+    # Descartar cols 0 y 1 (identificadores), última columna = clase
+    X = df.iloc[:, 2:n_cols - 1].values.astype(np.float32)
+    y_raw = df.iloc[:, n_cols - 1].values.astype(int)
+
+    # Clase: 0 = non-musk, 1 = musk (ya en formato binario)
+    y = y_raw.copy()
+
+    feature_names = np.array([f"feat_{i + 1}" for i in range(X.shape[1])])
+
+    print(
+        f"  [musk_v1] {X.shape[0]} conformaciones | {X.shape[1]} features | "
+        f"musk={int((y == 1).sum())} non-musk={int((y == 0).sum())}"
+    )
+
+    return X, y, feature_names
+
+
 def _binarize_labels(y_raw: np.ndarray, *, positive_label: Any) -> np.ndarray:
     if positive_label is None:
         raise ValueError("positive_label must be provided for binarization")
@@ -258,7 +437,10 @@ def load_dataset(
         from sklearn.datasets import fetch_openml
 
         bunch = fetch_openml(name=spec.openml_name, version=spec.openml_version, as_frame=False)
-        X = np.asarray(bunch.data)
+        # Algunos datasets (p.ej. Gisette) vienen como scipy sparse matrix desde OpenML.
+        # np.asarray(sparse) produce un array 0-D → usar .toarray() para convertir a denso.
+        from scipy.sparse import issparse
+        X = bunch.data.toarray() if issparse(bunch.data) else np.asarray(bunch.data)
         y_raw = np.asarray(bunch.target)
         y = _binarize_labels(y_raw, positive_label=positive_label)
         feature_names = np.asarray(getattr(bunch, "feature_names", [f"x{i}" for i in range(X.shape[1])]))
@@ -387,6 +569,67 @@ def load_dataset(
             "description": spec.description,
             "positive_label": positive_label,
             "label_mapping": f"{{2->0, {positive_label}->1}}",
+        }
+        return X, y, feature_names, meta
+
+    if spec.kind == "synthetic":
+        from sklearn.datasets import make_classification
+
+        weights = list(spec.weights) if spec.weights is not None else None
+        X, y = make_classification(
+            n_samples=spec.n_samples,
+            n_features=spec.n_features,
+            n_informative=spec.n_informative,
+            n_redundant=spec.n_redundant,
+            n_repeated=0,
+            n_classes=2,
+            n_clusters_per_class=1,
+            weights=weights,
+            class_sep=spec.class_sep,
+            flip_y=0.01,        # pequeño ruido de etiquetado (realismo)
+            random_state=42,    # fijo para que el dataset sea reproducible entre runs
+        )
+        y = y.astype(int)
+
+        feature_names = np.array(
+            [f"info_{i+1}" for i in range(spec.n_informative)]
+            + [f"redun_{i+1}" for i in range(spec.n_redundant)]
+            + [f"noise_{i+1}" for i in range(spec.n_features - spec.n_informative - spec.n_redundant)]
+        )
+
+        n_pos = int(y.sum())
+        n_neg = int((y == 0).sum())
+        print(
+            f"  [synthetic_pu] {spec.n_samples} muestras | {spec.n_features} features "
+            f"({spec.n_informative} inform. + {spec.n_redundant} redund. + "
+            f"{spec.n_features - spec.n_informative - spec.n_redundant} ruido) | "
+            f"pos={n_pos} neg={n_neg}"
+        )
+
+        meta = {
+            "dataset_id": dataset,
+            "kind": spec.kind,
+            "description": spec.description,
+            "positive_label": 1,
+            "n_informative": spec.n_informative,
+            "n_redundant": spec.n_redundant,
+            "n_noise": spec.n_features - spec.n_informative - spec.n_redundant,
+            "class_sep": spec.class_sep,
+        }
+        return X, y, feature_names, meta
+
+    if spec.kind == "uci_musk":
+        X, y, feature_names = _load_musk_v1()
+        # Binarize: clase positiva = 1 (musk), negativa = 0 (non-musk)
+        effective_positive_label = positive_label if positive_label is not None else 1
+        if effective_positive_label != 1:
+            # Permitir invertir la clase si se quiere
+            y = (y == effective_positive_label).astype(int)
+        meta = {
+            "dataset_id": dataset,
+            "kind": spec.kind,
+            "description": spec.description,
+            "positive_label": effective_positive_label,
         }
         return X, y, feature_names, meta
 

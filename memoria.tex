@@ -1,0 +1,423 @@
+\chapter{Introdución}
+\label{chap:introducion}
+
+\lettrine{E}{n} muchos problemas reales de aprendizaje automático, disponer de datos completamente etiquetados resulta poco realista. En teoría, los modelos supervisados asumen la existencia de ejemplos correctamente clasificados para cada una de las clases del problema; sin embargo, en la práctica, obtener esa información suele requerir procesos costosos, lentos o incluso inviables~\cite{bekker2020learning}. Mientras que identificar ejemplos positivos acostumbra a ser relativamente sencillo, usuarios que hicieron clic en un anuncio, genes previamente relacionados con una enfermedad o documentos pertenecientes a una determinada categoría, confirmar ejemplos negativos fiables resulta considerablemente más complejo. La ausencia de una etiqueta positiva no implica necesariamente que una instancia sea negativa: puede tratarse simplemente de un caso aún no identificado, no estudiado o pendiente de validación~\cite{bekker2020learning}.
+
+Como consecuencia, numerosos conjuntos de datos reales presentan una estructura incompleta, formada por un pequeño subconjunto de ejemplos positivos confirmados y una gran cantidad de datos sin etiquetar cuyo estado verdadero se desconoce.
+Dentro de ese conjunto no etiquetado pueden coexistir tanto ejemplos negativos reales como positivos ocultos, introduciendo incertidumbre y dificultando el aprendizaje automático tradicional~\cite{bekker2020learning}. Este problema aparece de manera natural en múltiples contextos donde el proceso de etiquetado
+depende de validaciones humanas, pruebas experimentales o sistemas de detección imperfectos: diagnóstico de enfermedades raras, detección de fraude financiero o identificación de genes asociados a enfermedades~\cite{mordelet2014bagging} son algunos de los ejemplos
+más ampliamente estudiados en la literatura~\cite{bekker2020learning}.
+
+Este escenario recibe el nombre de \textit{Positive-Unlabeled Learning}
+(PU~Learning) y plantea un reto importante: los datos no etiquetados no pueden tratarse automáticamente como ejemplos negativos sin introducir errores sistemáticos en el aprendizaje~\cite{elkan2008learning}. Cuando un modelo asume incorrectamente que todas las instancias no etiquetadas pertenecen a la clase negativa, parte de la información real queda distorsionada, generando sesgos que afectan tanto al entrenamiento como a la interpretación posterior de los resultados.
+
+Dentro de este contexto, la selección de características constituye una etapa especialmente relevante. La \textit{feature selection} consiste en identificar qué variables de un conjunto de datos aportan realmente información útil para resolver un problema de clasificación~\cite{guyon2003introduction}. En escenarios de alta dimensionalidad, como \textit{datasets} biomédicos, genómicos o problemas con cientos o miles de variables, muchas características pueden resultar redundantes, irrelevantes o incluso perjudiciales para el
+modelo~\cite{saeys2007review}. Reducir el número de variables no solo permite mejorar la eficiencia computacional, sino también aumentar la capacidad de generalización y facilitar la interpretabilidad de los resultados obtenidos.
+
+Entre las diferentes técnicas de selección de características, los métodos
+basados en Información Mutua (MI) destacan por medir directamente el grado de dependencia estadística entre cada variable y la clase objetivo, permitiendo detectar relaciones complejas más allá de dependencias lineales
+simples~\cite{peng2005feature, cover2006elements}. Sin embargo, en un escenario PU aparece una dificultad fundamental: la información utilizada para calcular dicha dependencia está incompleta y parcialmente sesgada, ya que parte de los verdaderos positivos permanecen ocultos dentro de los datos no etiquetados.
+Este trabajo propone y evalúa un método de selección de características por MI que aprovecha el marco probabilístico de Elkan y Noto~\cite{elkan2008learning} para corregir dicho sesgo y obtener rankings de características de mayor calidad.
+
+\section{Objetivos}
+\label{sec:objetivos}
+
+El objetivo principal de este Trabajo de Fin de Grado es diseñar, implementar y evaluar empíricamente un método de selección de características basado en información mutua adaptado al entorno de \textit{Positive-Unlabeled Learning} (PU~Learning), con el fin de determinar si la corrección probabilística propuesta permite obtener rankings de características de mayor calidad que los métodos que ignoran la naturaleza parcial del etiquetado.
+
+Para ello, se persiguen los siguientes objetivos específicos:
+
+\begin{enumerate}
+
+  \item \textbf{Revisión del estado del arte} en PU Learning y en métodos de
+  selección de características basados en información mutua, identificando las
+  limitaciones de los enfoques existentes cuando se aplican directamente a
+  datos PU~\cite{bekker2020learning, li2003learning, peng2005feature}.
+
+  \item \textbf{Preparación de un conjunto diverso de \textit{datasets}
+  experimentales}, incluyendo conjuntos de datos sintéticos controlados,
+  \textit{benchmarks} de selección de características y \textit{datasets}
+  reales de alta dimensión, para permitir una evaluación empírica robusta y
+  reproducible.
+
+  \item \textbf{Implementación de la metodología propuesta}, que comprende
+  cuatro pasos encadenados:
+
+  \begin{enumerate}
+
+    \item \textbf{Entrenamiento de un clasificador sobre datos PU para estimar
+    $P(s{=}1 \mid \mathbf{x})$.}
+    Se entrena un modelo de probabilidad calibrado, una
+    regresión logística sobre los datos disponibles, asignando la etiqueta positiva a los ejemplos
+    confirmados ($s=1$) y la negativa a los no etiquetados ($s=0$). Bajo la
+    suposición SCAR (\textit{Selected Completely At Random}), Elkan y
+    Noto~\cite{elkan2008learning} demostraron que dicho clasificador aprende una
+    puntuación proporcional a la probabilidad verdadera:
+    \[
+      \hat{P}(s{=}1 \mid \mathbf{x}) \;=\; c \cdot P(y{=}1 \mid \mathbf{x}),
+    \]
+    donde $c = P(s{=}1 \mid y{=}1)$ es la frecuencia de etiquetado, también
+    denominada parámetro $\alpha$. El clasificador produce estimaciones de
+    $\hat{P}(s{=}1 \mid \mathbf{x})$ en $[0,1]$ para cada instancia del
+    conjunto de datos.
+
+    \item \textbf{Estimación del parámetro $\alpha$ a partir de los datos
+    disponibles.}
+    El parámetro $\alpha = c = P(s{=}1 \mid y{=}1)$ representa la fracción de
+    positivos verdaderos que han sido etiquetados. Su estimación se fundamenta
+    en que, para los ejemplos positivos confirmados, $P(y{=}1 \mid \mathbf{x})
+    \approx 1$ y, por tanto, $\hat{P}(s{=}1 \mid \mathbf{x}) \approx c$.
+    Se implementan dos estimadores~\cite{elkan2008learning}:
+    \begin{itemize}
+      \item \textit{Estimador media}: $\hat{\alpha} = \mathbb{E}[\hat{P}(s{=}1
+      \mid \mathbf{x}) \mid s{=}1]$, calculado como la media de las
+      probabilidades predichas sobre el subconjunto etiquetado.
+      \item \textit{Estimador robusto}: emplea el percentil superior de dichas
+      probabilidades predichas para reducir la sensibilidad a estimaciones
+      atípicamente bajas, resultando más estable cuando el clasificador
+      base subestima sistemáticamente la probabilidad de algunos positivos.
+    \end{itemize}
+
+    \item \textbf{Corrección de las probabilidades de clase.}
+    Con $\hat{\alpha}$ conocido, la probabilidad corregida para cada instancia
+    se obtiene invirtiendo la proporcionalidad demostrada por Elkan y Noto:
+    \[
+      \hat{P}(y{=}1 \mid \mathbf{x}) \;=\;
+      \frac{\hat{P}(s{=}1 \mid \mathbf{x})}{\hat{\alpha}}.
+    \]
+    Los valores resultantes se truncan al intervalo $[0, 1]$ para garantizar su
+    validez como probabilidades. Esta señal continua sustituye a la etiqueta
+    binaria observada en el paso siguiente, permitiendo propagar la incertidumbre
+    sobre la clase verdadera en lugar de asignar etiquetas rígidas.
+
+    \item \textbf{Cálculo del ranking de características mediante MI sobre las
+    probabilidades corregidas.}
+    La información mutua entre cada característica $X_i$ y la señal corregida
+    $\hat{P}(y{=}1 \mid \mathbf{x})$. Las características se ordenan de mayor a menor puntuación de
+    MI, produciendo el ranking final utilizado para seleccionar el subconjunto
+    de variables más informativo respecto a la clase verdadera.
+
+  \end{enumerate}
+
+  \item \textbf{Comparación del método propuesto} con el enfoque
+  Naive, tratar los no etiquetados como negativos, y con la selección de
+  características sobre datos completamente etiquetados como referencia, utilizando métricas de correlación de rankings (coeficiente de
+  Spearman~\cite{spearman1904proof}) y solapamiento del \textit{top-K}.
+
+  \item \textbf{Evaluación del impacto de la selección de características} en el rendimiento de clasificación, midiendo el AUC-ROC obtenido al entrenar clasificadores utilizando las características seleccionadas por cada método~\cite{bradley1997use}.
+
+\end{enumerate}
+
+Para el desarrollo de este trabajo se seguirá una metodología de refinamiento progresivo, 
+
+
+\section{Estructura de la memoria}
+\label{sec:estructura_memoria}
+
+\chapter{Materiales y métodos}
+\label{chap:materiales_metodos}
+
+\lettrine{E}{n} este capítulo se describen los materiales, herramientas y métodos utilizados para el desarrollo experimental del trabajo. En primer lugar, se presentan las bibliotecas software y los conjuntos de datos empleados en la evaluación. A continuación, se detalla la metodología seguida para la generación del escenario \acrshort{pu}, el funcionamiento del método propuesto y los criterios utilizados para comparar su comportamiento frente a distintos enfoques de referencia.
+
+\section{Herramientas software}
+\label{sec:software}
+
+El desarrollo experimental se ha realizado en \textbf{Python 3.11}, utilizando bibliotecas especializadas para aprendizaje automático, cálculo numérico y gestión de experimentos.
+
+\begin{itemize}
+
+  \item \textbf{scikit-learn}~\cite{pedregosa2011sklearn}.  
+  Biblioteca de aprendizaje automático de propósito general. Se utiliza para entrenar el clasificador \acrshort{pu} (regresión logística), para la estimación de \acrshort{mi} (\texttt{mutual\_info\_regression}, basada en el estimador \acrshort{knn} de Kraskov et~al.~\cite{kraskov2004estimating}), para la evaluación mediante \acrshort{auc}-\acrshort{roc} y para la generación del dataset sintético (\texttt{make\_\allowbreak classification}).
+
+  \item \textbf{NumPy}~\cite{harris2020array}.  
+  Biblioteca de cálculo numérico sobre la que se apoyan todas las operaciones matriciales: cálculo de rankings, corrección de probabilidades, cómputo de métricas y manipulación de arrays de resultados.
+
+  \item \textbf{pandas}.  
+  Utilizado para la gestión y exportación de resultados tabulares (rankings de características, métricas por semilla y por valor de $\alpha$) en formato \acrshort{csv}.
+
+  \item \textbf{SciPy}~\cite{virtanen2020scipy}.  
+  Empleado para la carga de archivos \texttt{.mat} (datasets de microarray en formato MATLAB) y para el cálculo del coeficiente de correlación de Spearman (\texttt{scipy.\allowbreak stats.\allowbreak spearmanr}).
+
+  \item \textbf{MLflow}~\cite{zaharia2018mlflow}.  
+  Plataforma de seguimiento de experimentos. Se usa para registrar automáticamente hiperparámetros, métricas y artefactos (rankings en \acrshort{csv}) de cada ejecución, facilitando la trazabilidad y comparación entre configuraciones experimentales.
+
+\end{itemize}
+
+\section{Conjuntos de datos}
+\label{sec:datasets}
+
+Con el objetivo de evaluar el comportamiento del método propuesto en distintos escenarios, se han seleccionado varios conjuntos de datos con diferentes niveles de dimensionalidad, tamaño muestral y complejidad. Los experimentos incluyen \textit{benchmarks} clásicos de selección de características, datasets de clasificación general y datasets de microarray de alta dimensión, donde la selección de variables resulta especialmente relevante. En todos los casos, la clase positiva se define previamente (véase la Tabla~\ref{tab:datasets}) y el escenario \acrshort{pu} se genera artificialmente a partir de los datos completamente etiquetados mediante el proceso descrito en la Sección~\ref{sec:configuracion_pu}.
+
+% ── 2.2.1 Benchmarks ─────────────────────────────────────────────────────────
+\subsection{Benchmarks de selección de características}
+\label{subsec:benchmarks}
+
+\paragraph{Madelon.}
+Dataset artificial diseñado para el \textit{NIPS 2003 Feature Selection Challenge}~\cite{guyon2004result}. Contiene 2\,000 muestras y 500 características, de las cuales únicamente 5 son informativas, 15 redundantes y el resto ruido gaussiano puro. Su elevada proporción de ruido lo convierte en un \textit{benchmark} especialmente exigente para métodos de selección de características.
+
+\paragraph{Waveform-5000.}
+Dataset sintético generado a partir del trabajo de Breiman et~al.~\cite{breiman1984cart}. Consta de 5\,000 muestras y 40 características, combinando variables informativas y ruido gaussiano. El problema original multiclase se binariza para adaptarlo al escenario de clasificación utilizado en este trabajo.
+
+\paragraph{Sintético controlado (\textit{synthetic\_pu}).}
+Dataset generado mediante \texttt{make\_\allowbreak classification} de scikit-learn~\cite{pedregosa2011sklearn}, con 3\,000 muestras y 100 características, de las cuales 15 son informativas, 5 redundantes y 80 corresponden a ruido. Este dataset permite conocer exactamente qué variables son relevantes, facilitando la evaluación objetiva de los rankings obtenidos.
+
+% ── 2.2.2 Datasets de propósito general ──────────────────────────────────────
+\subsection{Datasets de propósito general}
+\label{subsec:general}
+
+\paragraph{MAGIC Gamma Telescope.}
+Dataset de clasificación binaria obtenido a partir de registros del telescopio MAGIC~\cite{bock2004methods}, utilizado para distinguir partículas de rayos gamma frente a partículas hadrónicas. Contiene 19\,020 muestras y 10 características continuas.
+
+\paragraph{Phoneme.}
+Dataset de clasificación acústica orientado a distinguir fonemas nasales y orales en señales de voz~\cite{lichman2013uci}. Contiene 5\,404 muestras y 5 características espectrales.
+
+\paragraph{Musk Version 1.}
+Dataset de clasificación molecular perteneciente al repositorio \acrshort{uci}~\cite{lichman2013uci}. El objetivo consiste en distinguir moléculas con olor a almizcle (\textit{musk}) de moléculas no almizcladas (\textit{non-musk}). Contiene 476 muestras y 166 características continuas, representando un escenario de dimensionalidad moderadamente alta.
+
+% ── 2.2.3 Microarrays de alta dimensión ──────────────────────────────────────
+\subsection{Datasets de microarray de alta dimensión}
+\label{subsec:microarray}
+
+Los datasets de microarray representan el escenario más complejo desde el punto de vista de la selección de características, ya que el número de variables supera ampliamente al número de muestras ($p \gg n$). En este contexto, identificar genes relevantes resulta fundamental tanto para el rendimiento predictivo como para la interpretabilidad de los modelos.
+
+\paragraph{Colon Cancer.}
+Dataset de microarray propuesto por Alon et~al.~\cite{alon1999broad}, que contiene aproximadamente 2\,000 genes medidos sobre 62 muestras de tejido de colon humano. El problema consiste en diferenciar tejido tumoral de tejido normal, siendo uno de los datasets más utilizados en la literatura de selección de características para escenarios de alta dimensionalidad.
+
+% ── Tabla resumen ─────────────────────────────────────────────────────────────
+\begin{table}[ht]
+\centering
+\caption{Resumen de los conjuntos de datos utilizados. $n$: número de muestras; $p$: número de características; \%pos: porcentaje de la clase positiva.}
+\label{tab:datasets}
+\small
+\begin{tabular}{llrrrl}
+\toprule
+\textbf{Dataset} & \textbf{Tipo} & $n$ & $p$ & \%pos & \textbf{Fuente} \\
+\midrule
+madelon          & Benchmark   & 2\,000  & 500    & 50\,\% & OpenML \\
+waveform-5000    & Benchmark   & 5\,000  & 40     & 33\,\% & OpenML \\
+synthetic\_pu    & Sintético   & 3\,000  & 100    & 35\,\% & scikit-learn \\
+\midrule
+magic\_telescope & General     & 19\,020 & 10     & 65\,\% & OpenML \\
+phoneme          & General     & 5\,404  & 5      & 29\,\% & OpenML \\
+musk             & General     & 476     & 166    & 44\,\% & \acrshort{uci} \\
+\midrule
+colon\_cancer    & Microarray  & 62      & 2\,000 & 65\,\% & \acrshort{geo} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+% ============================================================
+\section{Metodología}
+\label{sec:metodologia}
+% ============================================================
+
+% ── 2.3.1 Configuración del escenario PU ──────────────────────────────────────
+\subsection{Configuración del escenario \acrshort{pu}}
+\label{sec:configuracion_pu}
+
+Dado que los datasets empleados son originalmente de clasificación supervisada completa, el escenario \acrshort{pu} se genera artificialmente para poder disponer de una referencia \textit{ground truth} con la que evaluar los rankings obtenidos. El proceso sigue la hipótesis \acrshort{scar}~\cite{elkan2008learning, bekker2020learning}: únicamente una fracción $\alpha$ de los positivos verdaderos es etiquetada, mientras que el resto de positivos y todos los negativos permanecen dentro del conjunto no etiquetado.
+
+El parámetro $\alpha$ controla el nivel de completitud del etiquetado: valores próximos a 1 representan escenarios cercanos al aprendizaje supervisado, mientras que valores pequeños corresponden a situaciones con gran cantidad de positivos ocultos dentro del conjunto no etiquetado~\cite{bekker2020learning}. En los experimentos se evalúan distintos valores de $\alpha$ para analizar el comportamiento de los métodos bajo diferentes niveles de etiquetado parcial.
+
+% ── 2.3.2 Métodos comparados ──────────────────────────────────────────────────
+\subsection{Métodos de selección de características comparados}
+\label{sec:metodos_comparacion}
+
+Se comparan cuatro enfoques de selección de características basados en \acrshort{mi}~\cite{cover2006elements, peng2005feature}, que difieren en la señal utilizada para calcular la dependencia estadística entre las variables y la clase objetivo:
+
+\begin{description}
+
+  \item[\textit{Supervisado}.]
+  Calcula la \acrshort{mi} utilizando las etiquetas reales del problema mediante el estimador no paramétrico de Kraskov et~al.~\cite{kraskov2004estimating}. Representa el mejor resultado alcanzable y se emplea como referencia superior.
+
+  \item[\textit{Naive}.]
+  Trata todas las instancias no etiquetadas como ejemplos negativos y calcula la \acrshort{mi} directamente sobre la señal observada. Aunque es el enfoque más simple y utilizado habitualmente como línea base en escenarios \acrshort{pu}, introduce un sesgo sistemático cuando existen positivos ocultos dentro del conjunto no etiquetado~\cite{elkan2008learning, bekker2020learning}.
+
+  \item[\textit{\acrshort{pumi}}.]
+  Utiliza probabilidades corregidas estimadas mediante el marco probabilístico de Elkan y Noto~\cite{elkan2008learning} para calcular la \acrshort{mi}. El objetivo de este enfoque es aproximar el comportamiento del método \textit{supervisado} utilizando únicamente datos \acrshort{pu}, reduciendo el sesgo introducido por el etiquetado parcial.
+
+  \item[\textit{Varianza}.]
+  Método de referencia no supervisado basado en la selección de las características con mayor varianza~\cite{guyon2003introduction, saeys2007review}. Se incluye como comparación adicional al no utilizar información de clase durante el cálculo del ranking.
+
+\end{description}
+
+% ── 2.3.3 Métricas de evaluación ─────────────────────────────────────────────
+\subsection{Métricas de evaluación}
+\label{sec:metricas}
+
+La calidad de los rankings obtenidos se evalúa mediante distintas métricas complementarias:
+
+\paragraph{Correlación de Spearman ($\rho$).}
+Mide el grado de concordancia ordinal entre el ranking generado por cada método y el ranking de referencia del método \textit{supervisado}~\cite{spearman1904proof}. Esta métrica permite cuantificar hasta qué punto un método recupera el mismo orden relativo de relevancia entre características.
+
+\paragraph{Solapamiento del top-K.}
+Evalúa el número de características compartidas entre las $K$ variables más relevantes del método evaluado y las del método \textit{supervisado}. Esta métrica resulta especialmente útil cuando el interés práctico se centra en recuperar únicamente un subconjunto reducido de variables relevantes.
+
+\paragraph{\acrshort{auc}-\acrshort{roc}.}
+Para analizar el impacto práctico de la selección de características sobre la tarea de clasificación, se entrena un clasificador utilizando únicamente las variables seleccionadas por cada método y se evalúa su rendimiento mediante la métrica \acrshort{auc}-\acrshort{roc}~\cite{bradley1997use}. Esta evaluación permite comprobar si una mejor calidad del ranking se traduce también en una mejora del rendimiento predictivo.
+
+\chapter{Aprendizaje PU y selección de características}
+\label{chap:marco_teorico}
+
+\lettrine{L}{os} problemas de clasificación con etiquetado incompleto aparecen con frecuencia en aplicaciones reales de aprendizaje automático. En muchos dominios resulta sencillo identificar ejemplos positivos, mientras que obtener ejemplos negativos fiables requiere un proceso mucho más costoso o incluso inviable. Como consecuencia, numerosos conjuntos de datos contienen únicamente positivos confirmados junto con una gran cantidad de instancias sin etiquetar.
+
+Este escenario plantea importantes dificultades tanto para el entrenamiento de clasificadores como para tareas relacionadas con la interpretación de los datos, entre ellas la selección de características. Muchos métodos clásicos asumen la disponibilidad de etiquetas completas y pueden verse afectados cuando parte de la información de clase permanece oculta dentro del conjunto no etiquetado.
+
+En este trabajo se estudia la selección de características basada en información mutua en entornos \acrshort{pu}, analizando cómo el etiquetado parcial afecta al cálculo de relevancia de las variables y cómo puede corregirse mediante estimaciones probabilísticas. Para ello, en este capítulo se introducen los principales conceptos teóricos necesarios para el desarrollo posterior del método propuesto.
+
+% ============================================================
+\section{Aprendizaje supervisado tradicional}
+\label{sec:supervisado}
+% ============================================================
+
+El aprendizaje supervisado constituye uno de los paradigmas más utilizados dentro del aprendizaje automático~\cite{bishop2006pattern, hastie2009elements}. En este enfoque, los modelos se entrenan a partir de un conjunto de ejemplos previamente etiquetados, donde cada instancia está asociada a una clase o valor objetivo conocido. A partir de esta información, el algoritmo aprende patrones y relaciones presentes en los datos con el objetivo de realizar predicciones sobre nuevas muestras no observadas~\cite{vapnik1995nature}.
+
+Dentro de este paradigma, los problemas de clasificación binaria representan uno de los escenarios más habituales. En ellos, cada ejemplo pertenece a una de dos clases posibles, normalmente representadas como $y \in \{0,1\}$. Formalmente, se dispone de un conjunto de entrenamiento:
+
+\[
+\mathcal{D} = \{(\mathbf{x}_i, y_i)\}_{i=1}^{n},
+\]
+
+donde $\mathbf{x}_i \in \mathbb{R}^p$ representa el vector de características asociado a cada instancia e $y_i$ corresponde a su etiqueta de clase verdadera~\cite{bishop2006pattern}. El objetivo consiste en aprender una función capaz de aproximar la relación entre las características de entrada y la variable objetivo, permitiendo clasificar correctamente nuevas instancias~\cite{murphy2012machine}.
+
+Los métodos supervisados han demostrado un elevado rendimiento en una gran variedad de aplicaciones, como reconocimiento de imágenes, diagnóstico médico, procesamiento del lenguaje natural o detección de fraude~\cite{goodfellow2016deep}. Sin embargo, gran parte de estos algoritmos asumen la disponibilidad de conjuntos de datos completamente etiquetados, donde todas las instancias pertenecen de forma conocida a una clase concreta.
+
+En muchos problemas reales esta situación no siempre se cumple, dando lugar a escenarios de etiquetado parcial donde únicamente una parte de los ejemplos dispone de información de clase. Este contexto motiva el estudio de paradigmas alternativos como el aprendizaje \acrshort{pu}
+
+% ============================================================
+\section{Aprendizaje Positive-Unlabeled}
+\label{sec:pu_learning}
+% ============================================================
+
+\subsection{Definición del problema}
+\label{subsec:definicion_pu}
+
+El \acrfull{pu} formaliza el escenario descrito mediante tres variables
+aleatorias~\cite{elkan2008learning, bekker2020learning}:
+
+\begin{itemize}
+  \item $\mathbf{X} \in \mathbb{R}^p$: vector de características de una instancia.
+  \item $Y \in \{0, 1\}$: etiqueta de clase verdadera (latente, no observable).
+  \item $S \in \{0, 1\}$: variable de etiquetado observada ($S=1$ si la instancia
+  está etiquetada como positiva, $S=0$ en caso contrario).
+\end{itemize}
+
+El conjunto de entrenamiento se divide en dos partes: el conjunto de positivos
+etiquetados $\mathcal{P} = \{\mathbf{x}_i : s_i = 1\}$ y el conjunto no etiquetado
+$\mathcal{U} = \{\mathbf{x}_i : s_i = 0\}$. Este último contiene tanto negativos
+verdaderos ($y=0$) como positivos no identificados ($y=1, s=0$), mezclados en
+proporciones desconocidas. Se cumplen dos condiciones estructurales:
+
+\begin{equation}
+  P(s=1 \mid y=0) = 0,
+  \label{eq:no_false_pos}
+\end{equation}
+es decir, ningún ejemplo negativo verdadero puede aparecer etiquetado, y
+\begin{equation}
+  c = P(s=1 \mid y=1) \in (0, 1],
+  \label{eq:label_freq}
+\end{equation}
+donde $c$ recibe el nombre de \textit{frecuencia de etiquetado} (\textit{label
+frequency}) o parámetro $\alpha$, y representa la proporción de positivos verdaderos
+que han sido etiquetados~\cite{elkan2008learning}.
+
+\subsection{Hipótesis \acrshort{scar}}
+\label{subsec:scar}
+
+Para poder abordar el problema \acrshort{pu} es necesario asumir ciertas hipótesis sobre el proceso mediante el cual se generan las etiquetas observadas. La más utilizada en la literatura es la hipótesis \textit{\acrfull{scar}}~\cite{elkan2008learning, bekker2020learning}, que establece que todos los ejemplos positivos tienen la misma probabilidad de ser etiquetados, independientemente de sus características:
+
+\begin{equation}
+  P(s=1 \mid \mathbf{x}, y=1) \;=\; P(s=1 \mid y=1) \;=\; c.
+  \label{eq:scar}
+\end{equation}
+
+Bajo esta hipótesis, los positivos etiquetados pueden considerarse una muestra aleatoria representativa del conjunto completo de positivos. En otras palabras, el mecanismo de etiquetado no introduce preferencias hacia determinados tipos de instancias positivas en función de sus valores de entrada $\mathbf{x}$.
+
+La hipótesis \acrshort{scar} resulta especialmente importante porque permite relacionar las probabilidades aprendidas por un clasificador \acrshort{pu} con las probabilidades reales de pertenencia a la clase positiva~\cite{elkan2008learning}. Gracias a ello, es posible estimar probabilidades corregidas incluso cuando no se dispone de negativos explícitamente etiquetados.
+
+Existen alternativas más generales, como la hipótesis \textit{Selected At Random} (\acrshort{sar})~\cite{bekker2020learning}, donde la probabilidad de etiquetado sí puede depender de las características de cada instancia. Aunque este enfoque resulta más flexible y realista en algunos dominios, también introduce una complejidad significativamente mayor, ya que requiere modelar explícitamente el mecanismo de etiquetado. Por este motivo, en este trabajo se asume el escenario \acrshort{scar}.
+
+\subsection{Relación entre el clasificador \acrshort{pu} y el supervisado}
+\label{subsec:elkan_noto}
+
+Uno de los resultados más importantes dentro del aprendizaje \acrshort{pu} fue propuesto por Elkan y Noto~\cite{elkan2008learning}. Bajo la hipótesis \acrshort{scar}, los autores demostraron que un clasificador entrenado únicamente con positivos etiquetados y datos no etiquetados no aprende directamente la probabilidad real de pertenencia a la clase positiva, sino una versión escalada de esta.
+
+Sea $g(\mathbf{x})$ la salida probabilística de un clasificador entrenado en un escenario \acrshort{pu}, donde los ejemplos etiquetados se consideran positivos y el conjunto no etiquetado se trata como negativo durante el entrenamiento. Entonces, se cumple la siguiente relación:
+
+\begin{theorem}[Elkan \& Noto, 2008]
+Sea $g(\mathbf{x}) = P(s=1 \mid \mathbf{x})$ la probabilidad de etiquetado estimada por un clasificador \acrshort{pu} bajo la hipótesis \acrshort{scar}. Entonces:
+
+\begin{equation}
+  g(\mathbf{x}) \;=\; P(s=1 \mid \mathbf{x}) \;=\; c \cdot P(y=1 \mid \mathbf{x}),
+  \label{eq:elkan_noto}
+\end{equation}
+
+donde $c = P(s=1 \mid y=1)$ representa la frecuencia de etiquetado.
+\end{theorem}
+
+La importancia práctica de este resultado es especialmente relevante, ya que demuestra que las probabilidades obtenidas por un clasificador \acrshort{pu} conservan la misma estructura relativa que las probabilidades reales de pertenencia a la clase positiva. Aunque las probabilidades obtenidas por el clasificador \acrshort{pu} estén escaladas por una constante, la relación entre las instancias se mantiene. Esto significa que los ejemplos con mayor probabilidad de pertenecer a la clase positiva siguen recibiendo puntuaciones más altas que aquellos menos relevantes.
+
+Además, si se dispone de una estimación de $c$, es posible recuperar una aproximación de la probabilidad real mediante:
+
+\[
+P(y=1 \mid \mathbf{x})
+=
+\frac{P(s=1 \mid \mathbf{x})}{c}.
+\]
+
+Esta corrección probabilística constituye la base teórica utilizada posteriormente en el método propuesto de selección de características.
+
+\subsection{Estimación del parámetro $\alpha$}
+\label{subsec:estimacion_alpha}
+
+El parámetro $\alpha = c = P(s=1 \mid y=1)$ representa la proporción de ejemplos positivos que han sido etiquetados. Aunque este valor no es observable directamente, puede estimarse a partir de las probabilidades obtenidas por el clasificador \acrshort{pu}~\cite{elkan2008learning}.
+
+Bajo la hipótesis \acrshort{scar}, Elkan y Noto demostraron que las salidas del clasificador sobre los positivos etiquetados tienden a aproximarse al valor de $c$. A partir de esta idea, propusieron estimar dicho parámetro utilizando la media de las probabilidades predichas sobre el conjunto etiquetado:
+
+\[
+\hat{\alpha}
+=
+\frac{1}{n}
+\sum_{x \in \mathcal{P}} g(x)
+\]
+
+donde $g(\mathbf{x}) = P(s=1 \mid \mathbf{x})$ corresponde a la salida probabilística del clasificador \acrshort{pu}.
+
+En la práctica, la estimación de $\alpha$ resulta especialmente importante, ya que pequeños errores en su cálculo pueden afectar directamente a la corrección probabilística posterior.
+
+% ============================================================
+\section{Información Mutua para selección de características}
+\label{sec:info_mutua}
+% ============================================================
+
+\subsection{Definición y propiedades}
+\label{subsec:definicion_mi}
+
+La \acrfull{mi} es una medida utilizada para cuantificar la relación existente entre dos variables aleatorias~\cite{cover2006elements}. Intuitivamente, la \acrshort{mi} indica cuánto conocimiento aporta una variable sobre otra. En el contexto de selección de características, permite medir hasta qué punto una característica contiene información útil sobre la clase objetivo.
+
+Formalmente, la información mutua entre dos variables $X$ e $Y$ se define como:
+
+\begin{equation}
+I(X;Y)=
+\sum_{x \in \mathcal{X}}
+\sum_{y \in \mathcal{Y}}
+p(x,y)\log\frac{p(x,y)}{p(x)p(y)}.
+\label{eq:mi}
+\end{equation}
+
+donde $p(x,y)$ representa la distribución conjunta de ambas variables y $p(x)$, $p(y)$ sus distribuciones marginales~\cite{cover2006elements}.
+
+La \acrshort{mi} toma valores altos cuando existe una fuerte dependencia entre las variables, mientras que vale cero si ambas son estadísticamente independientes. A diferencia de medidas clásicas como la correlación de Pearson, la \acrshort{mi} permite detectar tanto relaciones lineales como no lineales entre variables~\cite{peng2005feature}.
+
+Estas propiedades han convertido a la \acrshort{mi} en uno de los criterios más utilizados en selección de características, especialmente en problemas de alta dimensionalidad y aprendizaje automático~\cite{guyon2003introduction, saeys2007review}.
+
+En este trabajo, la relevancia de cada característica se calcula utilizando la implementación \texttt{mutual\_info\_regression} de scikit-learn~\cite{pedregosa2011sklearn}, basada en el estimador no paramétrico propuesto por Kraskov et al.~\cite{kraskov2004estimating}.
+
+Sin embargo, en escenarios \acrshort{pu} aparece un problema importante: parte de los ejemplos positivos permanece oculta dentro del conjunto no etiquetado. Si todos los ejemplos no etiquetados se consideran negativos, enfoque \textit{naive}, la señal utilizada para calcular la información mutua contiene errores, lo que puede degradar el ranking de características obtenido.
+
+El método propuesto en este trabajo busca reducir este problema utilizando probabilidades corregidas obtenidas mediante el marco probabilístico de Elkan y Noto~\cite{elkan2008learning}, con el objetivo de aproximar mejor la relevancia real de las características.
+
+% ============================================================
+\bibliography{referencias}
+
+
+\end{document}

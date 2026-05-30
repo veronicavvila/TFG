@@ -268,12 +268,7 @@ def _sweep_alpha(X, y, feature_names, estimation_method, dataset_kind, output_di
     fig2, (ax2_full, ax2_topk) = plt.subplots(1, 2, figsize=(14, 5))
     
     # Definir colores para cada método
-    colores = {
-        'PU_corregido': '#FF8C42',     # Naranja
-        'MI_naive': '#2ECC71',          # Verde
-        'Varianza': '#E74C3C',          # Rojo
-        'MI_real': '#3498DB',           # Azul
-    }
+    colores = COLORES_METODOS
     
     # Gráfico 2a: Spearman FULL (todas las características)
     for label, col_mean, col_std in [
@@ -496,12 +491,7 @@ def _sweep_percent(X, y, feature_names, estimation_method, dataset_kind, output_
     mlflow.log_artifact(os.path.join(output_dir, 'auc_summary.csv'))
 
     # Colores consistentes con _sweep_alpha
-    colores = {
-        'PU_corregido': '#FF8C42',
-        'MI_naive':     '#2ECC71',
-        'Varianza':     '#E74C3C',
-        'MI_real':      '#3498DB',
-    }
+    colores = COLORES_METODOS
     x = summary['top_q_percent'].values
 
     fig, axes = plt.subplots(2, 2, figsize=(14, 10))
