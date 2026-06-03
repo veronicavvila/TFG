@@ -11,7 +11,7 @@ from src.config import *
 from src.datasets import load_dataset_from_config, load_dataset, crear_splitter_cv
 from src.pu_model import entrenar_clasificador_pu, estimar_alpha, estimar_alpha_robusto, obtener_scores, estimar_probabilidad_real
 from src.mi_utiles import calcular_mi_ranking, guardar_ranking
-from src.evaluacion import comparar_metodos, calcular_mi_naive, calcular_mi_real, calcular_varianza, spearman_rankings, spearman_rankings_topk
+from src.evaluacion import comparar_metodos, evaluar_sin_seleccion, calcular_mi_naive, calcular_mi_real, calcular_varianza, spearman_rankings, spearman_rankings_topk
 
 
 def _topk_overlap(ranking_a, ranking_b, k):
@@ -54,9 +54,9 @@ def _sweep_alpha(X, y, feature_names, estimation_method, dataset_kind, output_di
             
             p_y = estimar_probabilidad_real(scores, alpha_hat)
             
-            kfold = crear_splitter_cv(dataset_kind, n_splits=5, random_state=seed)
+            kfold = crear_splitter_cv(dataset_kind, n_splits=N_SPLITS, random_state=seed)
             fold_results = []
-            
+
             for fold_idx, (train_idx, test_idx) in enumerate(kfold.split(X_noisy, y)):
                 X_train = X_noisy[train_idx]
                 X_test = X_noisy[test_idx]
@@ -83,7 +83,9 @@ def _sweep_alpha(X, y, feature_names, estimation_method, dataset_kind, output_di
                     X_train, X_test, y_train, y_test,
                     ranking, ranking_naive, ranking_real, ranking_var, k=TOP_K
                 )
-                
+
+                auc_sin_sel = evaluar_sin_seleccion(X_train, X_test, y_train, y_test)
+
                 # Spearman completo (sobre todas las características)
                 spearman_naive_full = spearman_rankings(ranking_naive, ranking_real)
                 spearman_pu_full    = spearman_rankings(ranking,       ranking_real)
@@ -111,6 +113,7 @@ def _sweep_alpha(X, y, feature_names, estimation_method, dataset_kind, output_di
                     "auc_MI_naive": float(aucs["MI_naive"]),
                     "auc_MI_real": float(aucs["MI_real"]),
                     "auc_Varianza": float(aucs["Varianza"]),
+                    "auc_sin_seleccion": float(auc_sin_sel),
                     "ranking": ranking,
                     "ranking_naive": ranking_naive,
                     "ranking_real": ranking_real,
@@ -130,6 +133,7 @@ def _sweep_alpha(X, y, feature_names, estimation_method, dataset_kind, output_di
             mean_auc_naive = np.mean([r['auc_MI_naive'] for r in fold_results])
             mean_auc_real = np.mean([r['auc_MI_real'] for r in fold_results])
             mean_auc_var = np.mean([r['auc_Varianza'] for r in fold_results])
+            mean_auc_sin_sel = np.mean([r['auc_sin_seleccion'] for r in fold_results])
             
             if alpha not in rankings_by_alpha:
                 rankings_by_alpha[alpha] = {'pu': [], 'naive': [], 'real': [], 'var': []}
@@ -154,6 +158,7 @@ def _sweep_alpha(X, y, feature_names, estimation_method, dataset_kind, output_di
                 "auc_MI_naive":       float(mean_auc_naive),
                 "auc_MI_real":        float(mean_auc_real),
                 "auc_Varianza":       float(mean_auc_var),
+                "auc_sin_seleccion":  float(mean_auc_sin_sel),
             })
     
     # Guardar y procesar resultados
@@ -173,6 +178,8 @@ def _sweep_alpha(X, y, feature_names, estimation_method, dataset_kind, output_di
         auc_MI_real_std=       ('auc_MI_real',      'std'),
         auc_Varianza_mean=     ('auc_Varianza',     'mean'),
         auc_Varianza_std=      ('auc_Varianza',     'std'),
+        auc_sin_seleccion_mean=('auc_sin_seleccion','mean'),
+        auc_sin_seleccion_std= ('auc_sin_seleccion','std'),
         spearman_naive_full_mean= ('spearman_naive_full', 'mean'),
         spearman_naive_full_std=  ('spearman_naive_full', 'std'),
         spearman_pu_full_mean=    ('spearman_pu_full',    'mean'),
@@ -214,10 +221,19 @@ def _sweep_alpha(X, y, feature_names, estimation_method, dataset_kind, output_di
         'auc_MI_real_mean', 'auc_MI_real_std',
         'auc_Varianza_mean', 'auc_Varianza_std',
     ]
+    auc_ranking_cols = [
+        'alpha_true',
+        'auc_PU_corregido_mean', 'auc_PU_corregido_std',
+        'auc_MI_naive_mean',     'auc_MI_naive_std',
+        'auc_MI_real_mean',      'auc_MI_real_std',
+        'auc_Varianza_mean',     'auc_Varianza_std',
+        'auc_sin_seleccion_mean','auc_sin_seleccion_std',
+    ]
 
     df.to_csv(os.path.join(output_dir, 'alpha_sweep_runs.csv'), index=False)
     summary[summary_cols].to_csv(os.path.join(output_dir, 'alpha_sweep_summary.csv'), index=False)
     summary[auc_cols].to_csv(os.path.join(output_dir, 'auc_summary.csv'), index=False)
+    summary[auc_ranking_cols].to_csv(os.path.join(output_dir, 'auc_summary_ranking.csv'), index=False)
 
     mlflow.log_param('sweep_alphas', str(alphas))
     mlflow.log_param('sweep_seeds',  str(seeds))
@@ -228,7 +244,8 @@ def _sweep_alpha(X, y, feature_names, estimation_method, dataset_kind, output_di
     mlflow.log_artifact(os.path.join(output_dir, 'alpha_sweep_runs.csv'))
     mlflow.log_artifact(os.path.join(output_dir, 'alpha_sweep_summary.csv'))
     mlflow.log_artifact(os.path.join(output_dir, 'auc_summary.csv'))
-    
+    mlflow.log_artifact(os.path.join(output_dir, 'auc_summary_ranking.csv'))
+
     for _, row in summary.iterrows():
         a = row['alpha_true']
         mlflow.log_metric(f'alpha_{a}_hat_mean',             float(row['alpha_hat_mean']))
@@ -241,11 +258,15 @@ def _sweep_alpha(X, y, feature_names, estimation_method, dataset_kind, output_di
         mlflow.log_metric(f'alpha_{a}_spearman_pu_topk_mean',     float(row['spearman_pu_topk_mean']))
         mlflow.log_metric(f'alpha_{a}_stability_pu',         float(row['stability_pu']))
         mlflow.log_metric(f'alpha_{a}_stability_naive',      float(row['stability_naive']))
+        mlflow.log_metric(f'alpha_{a}_auc_sin_seleccion_mean', float(row['auc_sin_seleccion_mean']))
+        mlflow.log_metric(f'alpha_{a}_auc_sin_seleccion_std',  float(row['auc_sin_seleccion_std']))
     
-    # Gráfico 1: AUC vs alpha
+    colores = COLORES_METODOS
+
+    # Gráfico 1: AUC vs alpha (top-K, sin cambios)
     metodos = ['PU_corregido', 'MI_naive', 'MI_real', 'Varianza']
     auc_summary = df.groupby('alpha_true')[[f'auc_{m}' for m in metodos]].agg(['mean', 'std'])
-    
+
     fig, ax = plt.subplots(figsize=(8, 5))
     for metodo in metodos:
         means = auc_summary[(f'auc_{metodo}', 'mean')].values
@@ -253,7 +274,7 @@ def _sweep_alpha(X, y, feature_names, estimation_method, dataset_kind, output_di
         x     = auc_summary.index.values
         ax.plot(x, means, marker='o', label=metodo)
         ax.fill_between(x, means - stds, means + stds, alpha=0.15)
-    
+
     ax.set_xlabel('Alpha verdadero')
     ax.set_ylabel(f'AUC (top-{TOP_K} features)')
     ax.set_title('AUC vs Alpha por método de selección')
@@ -263,13 +284,37 @@ def _sweep_alpha(X, y, feature_names, estimation_method, dataset_kind, output_di
     fig.savefig(os.path.join(output_dir, 'auc_vs_alpha.png'), dpi=150)
     plt.close(fig)
     mlflow.log_artifact(os.path.join(output_dir, 'auc_vs_alpha.png'))
-    
+
+    # Gráfico 1b: AUC vs alpha — métodos top-K + baseline sin selección
+    auc_r_cols = [f'auc_{m}' for m in metodos] + ['auc_sin_seleccion']
+    auc_r_summary = df.groupby('alpha_true')[auc_r_cols].agg(['mean', 'std'])
+
+    fig_r, ax_r = plt.subplots(figsize=(8, 5))
+    for metodo in metodos:
+        means = auc_r_summary[(f'auc_{metodo}', 'mean')].values
+        stds  = auc_r_summary[(f'auc_{metodo}', 'std')].values
+        x     = auc_r_summary.index.values
+        ax_r.plot(x, means, marker='o', label=metodo, color=colores[metodo], linewidth=2)
+        ax_r.fill_between(x, means - stds, means + stds, alpha=0.15, color=colores[metodo])
+    means_ss = auc_r_summary[('auc_sin_seleccion', 'mean')].values
+    stds_ss  = auc_r_summary[('auc_sin_seleccion', 'std')].values
+    ax_r.plot(x, means_ss, marker='s', linestyle='--', label='sin_seleccion',
+              color=colores['sin_seleccion'], linewidth=2)
+    ax_r.fill_between(x, means_ss - stds_ss, means_ss + stds_ss, alpha=0.15, color=colores['sin_seleccion'])
+    ax_r.set_xlabel('Alpha verdadero')
+    ax_r.set_ylabel('AUC (clasificador)')
+    ax_r.set_title(f'AUC vs Alpha: métodos top-{TOP_K} vs sin selección')
+    ax_r.legend()
+    ax_r.grid(True, linestyle='--', alpha=0.5)
+    fig_r.tight_layout()
+    fig_r.savefig(os.path.join(output_dir, 'auc_vs_alpha_ranking.png'), dpi=150)
+    plt.close(fig_r)
+    mlflow.log_artifact(os.path.join(output_dir, 'auc_vs_alpha_ranking.png'))
+
     # Gráfico 2: Spearman vs Alpha (FULL y TOP-K comparadas)
     fig2, (ax2_full, ax2_topk) = plt.subplots(1, 2, figsize=(14, 5))
     
     # Definir colores para cada método
-    colores = COLORES_METODOS
-    
     # Gráfico 2a: Spearman FULL (todas las características)
     for label, col_mean, col_std in [
         ('PU_corregido',   'spearman_pu_full_mean',    'spearman_pu_full_std'),
@@ -375,7 +420,7 @@ def _sweep_percent(X, y, feature_names, estimation_method, dataset_kind, output_
             alpha_hat = estimar_alpha_robusto(scores, S, top_q_percent=top_q_percent)
             p_y = estimar_probabilidad_real(scores, alpha_hat)
 
-            kfold = crear_splitter_cv(dataset_kind, n_splits=5, random_state=seed)
+            kfold = crear_splitter_cv(dataset_kind, n_splits=N_SPLITS, random_state=seed)
             fold_results = []
 
             for fold_idx, (train_idx, test_idx) in enumerate(kfold.split(X_noisy, y)):
@@ -397,6 +442,8 @@ def _sweep_percent(X, y, feature_names, estimation_method, dataset_kind, output_
                     ranking_pu, ranking_naive, ranking_real, ranking_var, k=TOP_K
                 )
 
+                auc_sin_sel = evaluar_sin_seleccion(X_train, X_test, y_train, y_test)
+
                 spearman_pu_full    = spearman_rankings(ranking_pu,    ranking_real)
                 spearman_naive_full = spearman_rankings(ranking_naive, ranking_real)
                 spearman_var_full   = spearman_rankings(ranking_var,   ranking_real)
@@ -410,6 +457,7 @@ def _sweep_percent(X, y, feature_names, estimation_method, dataset_kind, output_
                     "auc_MI_naive":        float(aucs["MI_naive"]),
                     "auc_MI_real":         float(aucs["MI_real"]),
                     "auc_Varianza":        float(aucs["Varianza"]),
+                    "auc_sin_seleccion":   float(auc_sin_sel),
                     "spearman_pu_full":    float(spearman_pu_full),
                     "spearman_naive_full": float(spearman_naive_full),
                     "spearman_var_full":   float(spearman_var_full),
@@ -427,6 +475,7 @@ def _sweep_percent(X, y, feature_names, estimation_method, dataset_kind, output_
                 "auc_MI_naive":        float(np.mean([r["auc_MI_naive"]        for r in fold_results])),
                 "auc_MI_real":         float(np.mean([r["auc_MI_real"]         for r in fold_results])),
                 "auc_Varianza":        float(np.mean([r["auc_Varianza"]        for r in fold_results])),
+                "auc_sin_seleccion":   float(np.mean([r["auc_sin_seleccion"]   for r in fold_results])),
                 "spearman_pu_full":    float(np.mean([r["spearman_pu_full"]    for r in fold_results])),
                 "spearman_naive_full": float(np.mean([r["spearman_naive_full"] for r in fold_results])),
                 "spearman_var_full":   float(np.mean([r["spearman_var_full"]   for r in fold_results])),
@@ -451,6 +500,8 @@ def _sweep_percent(X, y, feature_names, estimation_method, dataset_kind, output_
         for m in metodos:
             row[f'auc_{m}_mean'] = float(subset[f'auc_{m}'].mean())
             row[f'auc_{m}_std']  = float(subset[f'auc_{m}'].std())
+        row['auc_sin_seleccion_mean'] = float(subset['auc_sin_seleccion'].mean())
+        row['auc_sin_seleccion_std']  = float(subset['auc_sin_seleccion'].std())
         for col in ['spearman_pu_topk', 'spearman_naive_topk', 'spearman_var_topk']:
             row[f'{col}_mean'] = float(subset[col].mean())
             row[f'{col}_std']  = float(subset[col].std())
@@ -462,9 +513,15 @@ def _sweep_percent(X, y, feature_names, estimation_method, dataset_kind, output_
                     'spearman_naive_topk_mean', 'spearman_naive_topk_std',
                     'spearman_var_topk_mean', 'spearman_var_topk_std']
     auc_cols = ['top_q_percent'] + [c for m in metodos for c in (f'auc_{m}_mean', f'auc_{m}_std')]
+    auc_ranking_cols = (
+        ['top_q_percent'] +
+        [c for m in metodos for c in (f'auc_{m}_mean', f'auc_{m}_std')] +
+        ['auc_sin_seleccion_mean', 'auc_sin_seleccion_std']
+    )
 
     summary[summary_cols].to_csv(os.path.join(output_dir, 'top_q_percent_sweep_summary.csv'), index=False)
     summary[auc_cols].to_csv(os.path.join(output_dir, 'auc_summary.csv'), index=False)
+    summary[auc_ranking_cols].to_csv(os.path.join(output_dir, 'auc_summary_ranking.csv'), index=False)
 
     mlflow.log_param("dataset",                 DATASET)
     mlflow.log_param("alpha_true",              alpha_true)
@@ -485,10 +542,13 @@ def _sweep_percent(X, y, feature_names, estimation_method, dataset_kind, output_
         mlflow.log_metric(f"top_q_{q}_spearman_pu_topk_mean",    float(row['spearman_pu_topk_mean']))
         mlflow.log_metric(f"top_q_{q}_spearman_naive_topk_mean", float(row['spearman_naive_topk_mean']))
         mlflow.log_metric(f"top_q_{q}_spearman_var_topk_mean",   float(row['spearman_var_topk_mean']))
+        mlflow.log_metric(f"top_q_{q}_auc_sin_seleccion_mean",   float(row['auc_sin_seleccion_mean']))
+        mlflow.log_metric(f"top_q_{q}_auc_sin_seleccion_std",    float(row['auc_sin_seleccion_std']))
 
     mlflow.log_artifact(os.path.join(output_dir, 'top_q_percent_sweep_runs.csv'))
     mlflow.log_artifact(os.path.join(output_dir, 'top_q_percent_sweep_summary.csv'))
     mlflow.log_artifact(os.path.join(output_dir, 'auc_summary.csv'))
+    mlflow.log_artifact(os.path.join(output_dir, 'auc_summary_ranking.csv'))
 
     # Colores consistentes con _sweep_alpha
     colores = COLORES_METODOS
@@ -569,6 +629,31 @@ def _sweep_percent(X, y, feature_names, estimation_method, dataset_kind, output_
     fig.savefig(os.path.join(output_dir, 'top_q_percent_sweep.png'), dpi=150, bbox_inches='tight')
     plt.close(fig)
     mlflow.log_artifact(os.path.join(output_dir, 'top_q_percent_sweep.png'))
+
+    # Gráfico: AUC vs Top Q Percent — métodos top-K + baseline sin selección
+    fig_r, ax_r = plt.subplots(figsize=(8, 5))
+    for metodo in metodos:
+        means = summary[f'auc_{metodo}_mean'].values
+        stds  = summary[f'auc_{metodo}_std'].values
+        ax_r.plot(x, means, marker='o', label=metodo, color=colores[metodo], linewidth=2)
+        ax_r.fill_between(x, means - stds, means + stds, alpha=0.15, color=colores[metodo])
+    ax_r.plot(x, summary['auc_sin_seleccion_mean'].values,
+              marker='s', linestyle='--', label='sin_seleccion',
+              color=colores['sin_seleccion'], linewidth=2)
+    ax_r.fill_between(x,
+                      summary['auc_sin_seleccion_mean'].values - summary['auc_sin_seleccion_std'].values,
+                      summary['auc_sin_seleccion_mean'].values + summary['auc_sin_seleccion_std'].values,
+                      alpha=0.15, color=colores['sin_seleccion'])
+    ax_r.set_xlabel('Top Q Percent (%)', fontsize=11)
+    ax_r.set_ylabel('AUC (clasificador)', fontsize=11)
+    ax_r.set_title(f'AUC vs Top Q Percent: métodos top-{TOP_K} vs sin selección', fontsize=12, fontweight='bold')
+    ax_r.legend()
+    ax_r.grid(True, alpha=0.3)
+    ax_r.set_xticks(top_q_percents)
+    fig_r.tight_layout()
+    fig_r.savefig(os.path.join(output_dir, 'auc_vs_alpha_ranking.png'), dpi=150)
+    plt.close(fig_r)
+    mlflow.log_artifact(os.path.join(output_dir, 'auc_vs_alpha_ranking.png'))
 
     print("\n" + "="*70)
     print("RESUMEN DE ESTIMACIONES")

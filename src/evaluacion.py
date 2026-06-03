@@ -148,6 +148,17 @@ def spearman_rankings(ranking_a, ranking_b):
     return float(corr)
 
 
+def evaluar_sin_seleccion(X_train, X_test, y_train, y_test):
+    """Baseline: LogisticRegression entrenado con TODAS las features, sin selección."""
+    modelo = Pipeline([
+        ("escalado", StandardScaler()),
+        ("clasificador", LogisticRegression(max_iter=5000))
+    ])
+    modelo.fit(X_train, y_train)
+    probabilidades = modelo.predict_proba(X_test)[:, 1]
+    return roc_auc_score(y_test, probabilidades)
+
+
 def spearman_rankings_topk(ranking_a, ranking_b, k):
     """
     Calcula la correlación de Spearman solo sobre los top-k elementos de cada ranking.

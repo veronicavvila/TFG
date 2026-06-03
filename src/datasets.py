@@ -9,10 +9,11 @@ from sklearn.model_selection import RepeatedStratifiedKFold, StratifiedKFold
 
 @dataclass(frozen=True)
 class DatasetSpec:
-    kind: str  # 'openml' | 'sklearn' | 'libsvm' | 'microarray' | 'mat' | 'synthetic'
+    kind: str  # 'openml' | 'sklearn' | 'libsvm' | 'microarray' | 'mat' | 'synthetic' | 'uci_nips2003'
     openml_name: Optional[str] = None
     openml_version: int = 1
     positive_label: Optional[Any] = None
+    positive_labels: Optional[tuple] = None  # multi-class binarization: y in positive_labels -> 1
     description: str = ""
     # Parámetros exclusivos para kind='synthetic' (make_classification)
     n_samples: int = 3000
@@ -21,6 +22,14 @@ class DatasetSpec:
     n_redundant: int = 5
     class_sep: float = 1.5
     weights: Optional[tuple] = None   # e.g. (0.65, 0.35) → 35% positivos
+    # Parámetros exclusivos para kind='synthetic_isotropic'
+    # X_i ~ N(d_i*(2y-1), 1) → MI(X_i;y) ≈ d_i²/2 para d_i pequeño
+    d_informative_range: tuple = (0.40, 0.49)  # MI ≈ [0.08, 0.12]
+    d_noise_range: tuple = (0.28, 0.40)         # MI ≈ [0.04, 0.08]
+    # Parámetros exclusivos para kind='uci_nips2003'
+    uci_id: int = 0
+    nips_format: str = ""   # 'dense' | 'sparse_kv' | 'sparse_binary'
+    uci_zip_name: str = ""  # nombre del ZIP en UCI (sin .zip); si vacío usa la clave del dataset
 
 
 _DATASETS: Dict[str, DatasetSpec] = {
@@ -66,6 +75,45 @@ _DATASETS: Dict[str, DatasetSpec] = {
         openml_version=1,
         positive_label="1",
         description="Phoneme (class 1 vs 2)",
+    ),
+    # ── AutoML Challenge 2 / UCI ─────────────────────────────────────────────
+    # Jasmine: dataset tabular binario del AutoML Challenge 2 (OpenML #41143)
+    #   ~2984 muestras, 144 features. n/p = 20.7. Balance ~50/50.
+    #   positive_label: "pos" (si falla, np.unique(bunch.target) mostrara las etiquetas reales)
+    "jasmine": DatasetSpec(
+        kind="automl_challenge",
+        positive_label=1,
+        description="Jasmine (AutoML Challenge 2) - 2984 muestras, 144 features, binario",
+    ),
+    # Internet Advertisements (UCI #51)
+    #   3279 muestras, 1558 features (3 cont. + 1555 binarias: URLs/patrones imagen).
+    #   Binario: 'ad.' = anuncio (positivo), 'nonad.' = contenido legítimo.
+    #   Alpha real ≈ 0.14 (14% anuncios). Features muy correlacionadas por diseño
+    #   (patrones URL co-ocurrentes) → naive MI falla por correlación + alpha pequeño.
+    #   Missing values en las 3 features continuas → imputados con mediana.
+    "internet_ads": DatasetSpec(
+        kind="uci_internet_ads",
+        positive_label="ad.",
+        description="Internet Advertisements (UCI #51) - 3279 muestras, 1558 features (3 cont. + 1555 bin.), ad=1 vs nonad=0, alpha≈0.14",
+    ),
+    # Epsilon (PASCAL Large Scale Learning Challenge 2008)
+    #   400K muestras, 2000 features numéricas densas, balanceado 50/50.
+    #   Descarga directa desde LIBSVM repository con streaming (solo descarga MAX_SAMPLES líneas).
+    #   Etiquetas originales: +1 / -1 → convertidas a {1, 0}.
+    "epsilon": DatasetSpec(
+        kind="libsvm_epsilon",
+        positive_label=1,
+        description="Epsilon PASCAL 2008 - 400K muestras, 2000 features densas, balanceado 50/50 (LIBSVM streaming)",
+    ),
+    # Phishing Websites (UCI / OpenML #4534)
+    #   11055 muestras, 30 features categoricas (-1/0/1: URL/pagina/dominio).
+    #   Binario: -1 = phishing (positivo, clase de fraude), 1 = legitimo.
+    #   n/p = 368. Balance ~55% phishing / 45% legitimo. LR no supera 95% facilmente.
+    #   positive_label: "-1" (si falla ajustar segun np.unique(bunch.target))
+    "phishing_websites": DatasetSpec(
+        kind="uci_phishing",
+        positive_label="-1",
+        description="Phishing Websites (UCI #327) - 2456 muestras, 30 features, phishing=-1 vs legitimo=1",
     ),
     # Scikit-learn toy dataset
     "breast_cancer": DatasetSpec(
@@ -130,6 +178,35 @@ _DATASETS: Dict[str, DatasetSpec] = {
         positive_label="1",   # OpenML: 1=digito9 (positivo), -1=digito4 (negativo)
         description="Gisette NIPS-2003 - ~7000 muestras, 5000 features (2500 reales + 2500 probe ruido), digito 9 vs 4",
     ),
+    # ── Sintético isótropo: todas las features tienen MI parecida ────────────
+    # 5000 muestras, 100 features: 10 informativas con MI(X;y) ∈ [0.08, 0.12]
+    # y 90 de ruido con MI(X;y) ∈ [0.04, 0.08].
+    # Con alpha pequeño, el ruido en MI(X;S) supera el gap (≈0.04) y naive
+    # eleva features de ruido al top, mientras PU (corregido por alpha) lo evita.
+    "synthetic_pu2": DatasetSpec(
+        kind="synthetic_isotropic",
+        description="Sintético isótropo - 5000 muestras, 100 features (10 inform. MI 0.08-0.12 + 90 ruido MI 0.04-0.08)",
+        n_samples=5000,
+        n_features=100,
+        n_informative=10,
+        d_informative_range=(0.40, 0.49),
+        d_noise_range=(0.28, 0.40),
+    ),
+    # ── CorrAL100: benchmark de features correlacionadas ─────────────────────
+    # 100000 muestras, 100 features: 5 informativas + 45 redundantes (combinaciones
+    # lineales de las informativas) + 50 ruido puro. Balance 50/50.
+    # Diseñado para que NB falle (viola independencia por correlación) y PU funcione
+    # (muestra grande, clases separables con las features correctas).
+    "corral100": DatasetSpec(
+        kind="synthetic",
+        description="CorrAL100 - 100000 muestras, 100 features (5 informativas + 45 redundantes correladas + 50 ruido), balanceado",
+        n_samples=100000,
+        n_features=100,
+        n_informative=5,
+        n_redundant=45,
+        class_sep=1.5,
+        weights=None,
+    ),
     # ── Sintético controlado (make_classification) ────────────────────────────
     # Garantiza los 3 comportamientos teóricos: naive falla, PU mejora, alpha converge
     "synthetic_pu": DatasetSpec(
@@ -152,6 +229,74 @@ _DATASETS: Dict[str, DatasetSpec] = {
         kind="uci_musk",
         positive_label=1,
         description="MUSK v1 - 476 conformaciones, 166 features moleculares (musk=1 vs non-musk=0)",
+    ),
+    # ── MUSK Version 2 ───────────────────────────────────────────────────────
+    # 6598 conformaciones de 102 moléculas, 166 features moleculares
+    # ~40% positivos (musk=1), ~60% negativos (non-musk=0)
+    # Origen: UCI ML Repository (ID=75)
+    "musk_v2": DatasetSpec(
+        kind="uci_musk_v2",
+        positive_label=1,
+        description="MUSK v2 - 6598 conformaciones, 166 features moleculares (musk=1 vs non-musk=0)",
+    ),
+    # ── NIPS 2003 Feature Selection Challenge (UCI directo) ───────────────────
+    # Arcene: microarray, detección de cáncer (cancer vs normal)
+    #   300 muestras (train=100 + valid=100 + test=100), 10000 features (masa/carga iónica)
+    #   Labels: +1 (cancer) / -1 (normal). Formato: denso float.
+    "arcene": DatasetSpec(
+        kind="uci_nips2003",
+        uci_id=167,
+        n_features=10000,
+        nips_format="dense",
+        positive_label=1,
+        description="Arcene NIPS-2003 - 300 muestras, 10000 features (cancer vs normal, microarray)",
+    ),
+    # Gisette extenso: reconocimiento de dígitos 4 vs 9 (versión completa UCI)
+    #   13500 muestras (train=6000 + valid=1000 + test=6500), 5000 features
+    #   2500 features reales + 2500 probe (ruido inyectado por diseño).
+    #   Formato: denso int.
+    "gisette_extenso": DatasetSpec(
+        kind="uci_nips2003",
+        uci_id=170,
+        n_features=5000,
+        nips_format="dense",
+        uci_zip_name="gisette",
+        positive_label=1,
+        description="Gisette NIPS-2003 extenso - 13500 muestras, 5000 features (dígito 4 vs 9, UCI completo)",
+    ),
+    # Dorothea: drug discovery, features binarias (presencia de subestructuras químicas)
+    #   1950 muestras (train=800 + valid=350 + test=800), 100000 features binarias
+    #   Muy disperso: ~1% de features activas por muestra. Formato: sparse binary (índices 1-based).
+    "dorothea": DatasetSpec(
+        kind="uci_nips2003",
+        uci_id=169,
+        n_features=100000,
+        nips_format="sparse_binary",
+        positive_label=1,
+        description="Dorothea NIPS-2003 - 1950 muestras, 100000 features binarias (drug discovery, sparse)",
+    ),
+    # Dexter: categorización de texto (Reuters), features TF-IDF
+    #   2600 muestras (train=300 + valid=300 + test=2000), 20000 features
+    #   Muy disperso. Formato: sparse key:value (índices 1-based).
+    "dexter": DatasetSpec(
+        kind="uci_nips2003",
+        uci_id=168,
+        n_features=20000,
+        nips_format="sparse_kv",
+        positive_label=1,
+        description="Dexter NIPS-2003 - 2600 muestras, 20000 features (text categorization, TF-IDF sparse)",
+    ),
+    # Madelon extenso: dataset artificial del NIPS 2003 (versión completa UCI)
+    #   4400 muestras (train=2000 + valid=600 + test=1800), 500 features
+    #   5 features clave + 15 redundantes + 480 ruido puro. Formato: denso float.
+    "madelon_extenso": DatasetSpec(
+        kind="uci_nips2003",
+        uci_id=171,
+        n_features=500,
+        nips_format="dense",
+        uci_zip_name="madelon",
+        positive_label=1,
+        description="Madelon NIPS-2003 extenso - 4400 muestras, 500 features (5 clave + 15 redund. + 480 ruido, UCI completo)",
     ),
     # Raw microarray MAT files
     "cns": DatasetSpec(
@@ -397,10 +542,513 @@ def _load_musk_v1() -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     return X, y, feature_names
 
 
-def _binarize_labels(y_raw: np.ndarray, *, positive_label: Any) -> np.ndarray:
+def _load_musk_v2() -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Descarga y carga MUSK Version 2 desde UCI ML Repository.
+
+    Formato de clean2.data (igual que v1):
+        molecule_name, conformation_name, feat_1, ..., feat_166, class
+        → columna 0:   nombre molécula   (descartada)
+        → columna 1:   nombre conformación (descartada)
+        → columnas 2–167: 166 features numéricas
+        → columna 168: clase (0 = non-musk, 1 = musk)
+
+    Caché local: data/musk_v2/clean2.csv
+    """
+    import os
+    import zipfile
+    import io
+    import urllib.request
+
+    cache_dir = os.path.join("data", "musk_v2")
+    os.makedirs(cache_dir, exist_ok=True)
+    csv_cache = os.path.join(cache_dir, "clean2.csv")
+
+    if os.path.exists(csv_cache):
+        import pandas as pd
+        df = pd.read_csv(csv_cache, header=None)
+    else:
+        zip_url = "https://archive.ics.uci.edu/static/public/75/musk+version+2.zip"
+        zip_path = os.path.join(cache_dir, "musk_v2.zip")
+
+        if not os.path.exists(zip_path):
+            print("Descargando MUSK v2 desde UCI ML Repository...")
+            try:
+                urllib.request.urlretrieve(zip_url, zip_path)
+                print(f"  Descarga completada: {zip_path}")
+            except Exception as e:
+                raise RuntimeError(
+                    f"Error descargando MUSK v2:\n{e}\n"
+                    f"Descarga manual desde: {zip_url}\n"
+                    f"Guarda el ZIP en: {zip_path}"
+                )
+
+        with zipfile.ZipFile(zip_path, 'r') as zf:
+            z_candidates = [n for n in zf.namelist() if n.endswith("clean2.data.Z")]
+            csv_candidates = [n for n in zf.namelist() if n.lower().endswith(".csv")]
+
+            if csv_candidates:
+                import pandas as pd
+                with zf.open(csv_candidates[0]) as f:
+                    df = pd.read_csv(f, header=None)
+                df.to_csv(csv_cache, index=False, header=False)
+                print(f"  MUSK v2 cargado desde CSV embebido: {csv_candidates[0]}")
+
+            elif z_candidates:
+                try:
+                    from unlzw3 import unlzw
+                except ImportError:
+                    raise ImportError(
+                        "El fichero MUSK v2 está en formato .Z (Unix compress/LZW).\n"
+                        "Instala el descompresor: pip install unlzw3\n"
+                        "Y vuelve a ejecutar."
+                    )
+                with zf.open(z_candidates[0]) as f:
+                    compressed_bytes = f.read()
+                raw_bytes = unlzw(compressed_bytes)
+                text = raw_bytes.decode("ascii")
+
+                import pandas as pd
+                df = pd.read_csv(io.StringIO(text), header=None)
+                df.to_csv(csv_cache, index=False, header=False)
+                print(f"  MUSK v2 descomprimido (.Z->CSV) y guardado en cache: {csv_cache}")
+
+            else:
+                available = zf.namelist()
+                raise RuntimeError(
+                    f"No se encontró clean2.data.Z ni CSV en el ZIP.\n"
+                    f"Ficheros disponibles: {available}"
+                )
+
+    import pandas as pd
+    if not isinstance(df, pd.DataFrame):
+        df = pd.read_csv(csv_cache, header=None)
+
+    if df.shape[1] not in (168, 169):
+        raise ValueError(
+            f"Se esperaban 168 o 169 columnas en MUSK v2, se encontraron {df.shape[1]}.\n"
+            f"Borra la caché en {cache_dir} y vuelve a intentarlo."
+        )
+
+    n_cols = df.shape[1]
+    X = df.iloc[:, 2:n_cols - 1].values.astype(np.float32)
+    y_raw = df.iloc[:, n_cols - 1].values.astype(int)
+    y = y_raw.copy()
+
+    feature_names = np.array([f"feat_{i + 1}" for i in range(X.shape[1])])
+
+    print(
+        f"  [musk_v2] {X.shape[0]} conformaciones | {X.shape[1]} features | "
+        f"musk={int((y == 1).sum())} non-musk={int((y == 0).sum())}"
+    )
+
+    return X, y, feature_names
+
+
+def _load_phishing_websites() -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Descarga y carga Phishing Websites desde UCI ML Repository (ID 379).
+
+    30 features categoricas {-1, 0, 1}, target Result {-1=phishing, 1=legitimo}.
+    Cache local: data/phishing_websites/Training Dataset.arff
+    """
+    import os
+    import zipfile
+    import urllib.request
+
+    cache_dir = os.path.join("data", "phishing_websites")
+    os.makedirs(cache_dir, exist_ok=True)
+    arff_cache = os.path.join(cache_dir, "Training Dataset.arff")
+
+    if not os.path.exists(arff_cache):
+        zip_url = "https://archive.ics.uci.edu/static/public/327/phishing+websites.zip"
+        zip_path = os.path.join(cache_dir, "phishing_websites.zip")
+
+        if not os.path.exists(zip_path):
+            print("Descargando Phishing Websites desde UCI ML Repository...")
+            try:
+                urllib.request.urlretrieve(zip_url, zip_path)
+                print(f"  Descarga completada: {zip_path}")
+            except Exception as e:
+                raise RuntimeError(
+                    f"Error descargando Phishing Websites:\n{e}\n"
+                    f"Descarga manual desde: https://archive.ics.uci.edu/dataset/327/phishing+websites\n"
+                    f"Guarda el ZIP en: {zip_path}"
+                )
+
+        with zipfile.ZipFile(zip_path, "r") as zf:
+            arff_names = [n for n in zf.namelist() if n.lower().endswith(".arff")]
+            if not arff_names:
+                raise RuntimeError(
+                    f"No se encontro fichero ARFF en el ZIP.\n"
+                    f"Contenido: {zf.namelist()}"
+                )
+            member = arff_names[0]
+            zf.extract(member, cache_dir)
+            extracted = os.path.join(cache_dir, member)
+            if extracted != arff_cache:
+                os.replace(extracted, arff_cache)
+        print(f"  ARFF extraido en: {arff_cache}")
+
+    from scipy.io.arff import loadarff
+    data, meta_arff = loadarff(arff_cache)
+
+    import pandas as pd
+    df = pd.DataFrame(data)
+
+    target_col = "Result"
+    if target_col not in df.columns:
+        target_col = df.columns[-1]
+
+    y_raw = df[target_col].values
+    if len(y_raw) > 0 and hasattr(y_raw[0], "decode"):
+        y_raw = np.array([v.decode("utf-8") for v in y_raw])
+
+    feature_cols = [c for c in df.columns if c != target_col]
+    X_raw = df[feature_cols].values
+    # Nominal attributes come as bytes; convert to float
+    if len(X_raw) > 0 and hasattr(X_raw.flat[0], "decode"):
+        X = np.array([[float(v.decode("utf-8")) for v in row] for row in X_raw], dtype=np.float32)
+    else:
+        X = X_raw.astype(np.float32)
+
+    feature_names = np.asarray(feature_cols)
+
+    print(
+        f"  [phishing_websites] {X.shape[0]} muestras | {X.shape[1]} features | "
+        f"phishing={int((y_raw == '-1').sum())} legitimo={int((y_raw == '1').sum())}"
+    )
+    return X, y_raw, feature_names
+
+
+def _load_epsilon_libsvm(max_samples: Optional[int] = None) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Descarga epsilon desde LIBSVM repository usando streaming bz2.
+
+    Solo descarga las primeras `max_samples` líneas del stream comprimido,
+    evitando bajar los ~2.3 GB completos cuando MAX_SAMPLES está configurado.
+    Caché local: data/epsilon/epsilon_n{max_samples}.libsvm  (o epsilon_full.libsvm)
+
+    Etiquetas originales +1/-1 → convertidas a {1, 0}.
+    """
+    import os
+    import bz2
+    import urllib.request
+    from sklearn.datasets import load_svmlight_file
+    from scipy.sparse import issparse
+
+    cache_dir = os.path.join("data", "epsilon")
+    os.makedirs(cache_dir, exist_ok=True)
+    tag = f"n{max_samples}" if max_samples else "full"
+    libsvm_cache = os.path.join(cache_dir, f"epsilon_{tag}.libsvm")
+
+    if not os.path.exists(libsvm_cache):
+        url = "https://www.csie.ntu.edu.tw/~cjlin/libsvmtools/datasets/binary/epsilon_normalized.bz2"
+        print(f"Descargando epsilon desde LIBSVM (streaming, max_samples={max_samples})...")
+        req = urllib.request.Request(url, headers={"User-Agent": "python-urllib"})
+        import ssl
+        ssl_ctx = ssl.create_default_context()
+        ssl_ctx.check_hostname = False
+        ssl_ctx.verify_mode = ssl.CERT_NONE
+        lines_collected = []
+        try:
+            with urllib.request.urlopen(req, timeout=120, context=ssl_ctx) as resp:
+                decomp = bz2.BZ2Decompressor()
+                partial = b""
+                bytes_dl = 0
+                while True:
+                    raw = resp.read(1 << 16)   # 64 KB
+                    if not raw:
+                        break
+                    bytes_dl += len(raw)
+                    try:
+                        data = decomp.decompress(raw)
+                    except EOFError:
+                        break
+                    partial += data
+                    while b"\n" in partial:
+                        line, partial = partial.split(b"\n", 1)
+                        if line.strip():
+                            lines_collected.append(line)
+                            if max_samples and len(lines_collected) >= max_samples:
+                                break
+                    if max_samples and len(lines_collected) >= max_samples:
+                        print(f"  {len(lines_collected)} líneas / {bytes_dl / 2**20:.0f} MB descargados")
+                        break
+                    if lines_collected and len(lines_collected) % 50_000 == 0:
+                        print(f"  {len(lines_collected)} líneas leídas...")
+        except Exception as e:
+            raise RuntimeError(
+                f"Error descargando epsilon:\n{e}\n"
+                f"Descarga manual desde: {url}\n"
+                f"Descomprime y guarda como: {os.path.abspath(libsvm_cache)}"
+            )
+        if not lines_collected:
+            raise RuntimeError("No se descargaron líneas de epsilon. Comprueba la conexión.")
+
+        with open(libsvm_cache, "wb") as f:
+            f.write(b"\n".join(lines_collected) + b"\n")
+        print(f"  Caché guardado: {libsvm_cache}")
+
+    X_sp, y_raw = load_svmlight_file(libsvm_cache, n_features=2000)
+    X = X_sp.toarray().astype(np.float32) if issparse(X_sp) else np.asarray(X_sp, dtype=np.float32)
+    y_raw = np.asarray(y_raw)
+    y = (y_raw > 0).astype(int)   # +1 → 1, -1 → 0
+
+    feature_names = np.array([f"feat_{i + 1}" for i in range(X.shape[1])])
+    print(
+        f"  [epsilon] {X.shape[0]} muestras | {X.shape[1]} features | "
+        f"+1={int((y == 1).sum())} -1={int((y == 0).sum())}"
+    )
+    return X, y, feature_names
+
+
+def _load_internet_ads() -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Descarga y carga Internet Advertisements desde UCI ML Repository (ID 51).
+
+    3279 muestras, 1558 features (3 continuas: height/width/aratio + 1555 binarias).
+    Missing values en cols 0-2 marcados como '?' → imputados con mediana de columna.
+    Clases: 'ad.' (positivo=1) vs 'nonad.' (negativo=0). Alpha real ≈ 0.14.
+    Caché local: data/internet_ads/ad.data
+    """
+    import os
+    import zipfile
+    import urllib.request
+
+    cache_dir = os.path.join("data", "internet_ads")
+    os.makedirs(cache_dir, exist_ok=True)
+    csv_cache = os.path.join(cache_dir, "ad.data")
+
+    if not os.path.exists(csv_cache):
+        zip_url = "https://archive.ics.uci.edu/static/public/51/internet+advertisements.zip"
+        zip_path = os.path.join(cache_dir, "internet_ads.zip")
+
+        if not os.path.exists(zip_path):
+            print("Descargando Internet Advertisements desde UCI ML Repository...")
+            try:
+                urllib.request.urlretrieve(zip_url, zip_path)
+                print(f"  Descarga completada: {zip_path}")
+            except Exception as e:
+                raise RuntimeError(
+                    f"Error descargando Internet Ads:\n{e}\n"
+                    f"Descarga manual desde: https://archive.ics.uci.edu/dataset/51/internet+advertisements\n"
+                    f"Guarda el ZIP en: {zip_path}"
+                )
+
+        with zipfile.ZipFile(zip_path, "r") as zf:
+            data_candidates = [n for n in zf.namelist() if n.lower().endswith("ad.data")]
+            if not data_candidates:
+                raise RuntimeError(
+                    f"No se encontró ad.data en el ZIP.\nContenido: {zf.namelist()}"
+                )
+            with zf.open(data_candidates[0]) as f:
+                content = f.read().decode("utf-8", errors="replace")
+        with open(csv_cache, "w", encoding="utf-8") as f:
+            f.write(content)
+        print(f"  ad.data extraído en: {csv_cache}")
+
+    import pandas as pd
+
+    # '   ?' y variantes son missing values en las 3 primeras columnas (continuas)
+    df = pd.read_csv(
+        csv_cache, header=None,
+        na_values=["   ?", "  ?", " ?", "?"],
+        skipinitialspace=True,
+    )
+
+    y_raw = np.array([str(v).strip() for v in df.iloc[:, -1].values])
+    X_df = df.iloc[:, :-1].apply(pd.to_numeric, errors="coerce")
+
+    # Imputa con mediana por columna (solo cols 0-2 tienen NaN en la práctica)
+    for col in X_df.columns:
+        if X_df[col].isna().any():
+            X_df[col] = X_df[col].fillna(X_df[col].median())
+
+    X = X_df.values.astype(np.float32)
+    feature_names = np.array([f"feat_{i + 1}" for i in range(X.shape[1])])
+
+    n_ad = int((y_raw == "ad.").sum())
+    n_nonad = int((y_raw == "nonad.").sum())
+    print(
+        f"  [internet_ads] {X.shape[0]} muestras | {X.shape[1]} features | "
+        f"ad={n_ad} nonad={n_nonad} alpha_real={n_ad / (n_ad + n_nonad):.2f}"
+    )
+    return X, y_raw, feature_names
+
+
+def _generate_synthetic_isotropic(spec: "DatasetSpec"):
+    """Genera dataset sintético isótropo con gap de MI controlado.
+
+    Modelo de generación:
+        X_i ~ N( d_i * (2*y - 1),  1 )
+
+    donde d_i controla MI(X_i; y) ≈ d_i²/2 (aproximación válida para d<0.6).
+    Las features informativas tienen d_i ∈ spec.d_informative_range y las de
+    ruido d_j ∈ spec.d_noise_range. El gap entre rangos es ≈ 0.04 nats, justo
+    suficiente para que con alpha pequeño MI(X_j; S) supere MI(X_i; S) por ruido.
+    """
+    rng = np.random.RandomState(42)
+    n = spec.n_samples
+    n_info = spec.n_informative
+    n_noise = spec.n_features - n_info
+
+    # Etiquetas balanceadas, barajadas
+    y = np.zeros(n, dtype=int)
+    y[: n // 2] = 1
+    rng.shuffle(y)
+
+    d_info  = rng.uniform(*spec.d_informative_range, size=n_info)
+    d_noise = rng.uniform(*spec.d_noise_range,        size=n_noise)
+    d_all   = np.concatenate([d_info, d_noise])
+
+    signs = (2 * y - 1).astype(float)          # +1 clase positiva, -1 negativa
+    X = rng.normal(0.0, 1.0, size=(n, len(d_all)))
+    X += signs[:, None] * d_all[None, :]        # desplaza la media según la clase
+
+    feature_names = np.array(
+        [f"info_{i + 1}" for i in range(n_info)] +
+        [f"noise_{i + 1}" for i in range(n_noise)]
+    )
+    return X.astype(np.float32), y, feature_names
+
+
+def _load_nips2003(
+    dataset_name: str,
+    uci_id: int,
+    n_features: int,
+    fmt: str,
+    uci_zip_name: str = "",
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Carga datasets NIPS-2003 Feature Selection Challenge desde UCI ML Repository.
+
+    Formatos soportados:
+      'dense'         – filas de floats separados por espacios (Arcene, Gisette, Madelon)
+      'sparse_kv'     – pares índice:valor 1-based (Dexter)
+      'sparse_binary' – lista de índices 1-based de features activas (Dorothea)
+
+    Labels: +1 / -1 → convertidas a {1, 0}.
+    Combina todos los splits (train/valid/test) que tengan etiquetas en el ZIP.
+    Caché: data/{dataset_name}/{dataset_name}.zip
+    """
+    import os, zipfile, io, urllib.request
+
+    cache_dir = os.path.join("data", dataset_name)
+    os.makedirs(cache_dir, exist_ok=True)
+
+    zip_file_name = uci_zip_name if uci_zip_name else dataset_name
+    zip_url = f"https://archive.ics.uci.edu/static/public/{uci_id}/{zip_file_name}.zip"
+    zip_path = os.path.join(cache_dir, f"{zip_file_name}.zip")
+
+    if not os.path.exists(zip_path):
+        print(f"Descargando {dataset_name} desde UCI (ID={uci_id})...")
+        try:
+            urllib.request.urlretrieve(zip_url, zip_path)
+            print(f"  Descarga completada: {zip_path}")
+        except Exception as e:
+            raise RuntimeError(
+                f"Error descargando {dataset_name} (UCI ID={uci_id}):\n{e}\n"
+                f"Descarga manual desde: https://archive.ics.uci.edu/dataset/{uci_id}\n"
+                f"Guarda el ZIP en: {os.path.abspath(zip_path)}"
+            )
+
+    X_parts: list = []
+    y_parts: list = []
+
+    with zipfile.ZipFile(zip_path, "r") as zf:
+        all_files = zf.namelist()
+
+        for split in ("train", "valid", "test"):
+            data_file = next(
+                (f for f in all_files if f.lower().endswith(f"_{split}.data")), None
+            )
+            label_file = next(
+                (f for f in all_files if f.lower().endswith(f"_{split}.labels")), None
+            )
+
+            if label_file is None:
+                if split in ("train", "valid"):
+                    raise RuntimeError(
+                        f"No se encontró {split}.labels para {dataset_name}.\n"
+                        f"Archivos en ZIP: {all_files}"
+                    )
+                continue  # test labels pueden no estar incluidas
+
+            if data_file is None:
+                if split in ("train", "valid"):
+                    raise RuntimeError(
+                        f"No se encontró {split}.data para {dataset_name}.\n"
+                        f"Archivos en ZIP: {all_files}"
+                    )
+                continue
+
+            with zf.open(label_file) as fh:
+                y_split = np.array(
+                    [int(v) for v in fh.read().decode("ascii", errors="replace").split()],
+                    dtype=int,
+                )
+            n_split = len(y_split)
+
+            with zf.open(data_file) as fh:
+                data_text = fh.read().decode("ascii", errors="replace")
+
+            lines = [ln for ln in data_text.splitlines() if ln.strip()]
+
+            if fmt == "dense":
+                rows = [np.fromstring(ln, dtype=np.float32, sep=" ") for ln in lines]
+                X_split = np.stack(rows).astype(np.float32)
+
+            elif fmt == "sparse_kv":
+                X_split = np.zeros((n_split, n_features), dtype=np.float32)
+                for i, ln in enumerate(lines[:n_split]):
+                    for token in ln.split():
+                        if ":" in token:
+                            idx_s, val_s = token.split(":", 1)
+                            idx = int(idx_s) - 1
+                            if 0 <= idx < n_features:
+                                X_split[i, idx] = float(val_s)
+
+            elif fmt == "sparse_binary":
+                X_split = np.zeros((n_split, n_features), dtype=np.float32)
+                for i, ln in enumerate(lines[:n_split]):
+                    for token in ln.split():
+                        idx = int(token) - 1
+                        if 0 <= idx < n_features:
+                            X_split[i, idx] = 1.0
+
+            else:
+                raise ValueError(f"nips_format desconocido: {fmt!r}")
+
+            X_parts.append(X_split)
+            y_parts.append(y_split)
+            print(f"  [{dataset_name}] {split}: {n_split} muestras")
+
+    if not X_parts:
+        raise RuntimeError(f"No se cargó ningún split para {dataset_name}")
+
+    X = np.concatenate(X_parts, axis=0)
+    y_raw = np.concatenate(y_parts, axis=0)
+    y = (y_raw > 0).astype(int)  # ±1 → {1, 0}
+
+    feature_names = np.array([f"feat_{i + 1}" for i in range(n_features)])
+    print(
+        f"  [{dataset_name}] total: {X.shape[0]} muestras | {X.shape[1]} features "
+        f"| pos={int((y == 1).sum())} neg={int((y == 0).sum())}"
+    )
+    return X, y, feature_names
+
+
+def _binarize_labels(y_raw: np.ndarray, *,
+                     positive_label: Any = None,
+                     positive_labels: Any = None) -> np.ndarray:
+    if positive_labels is not None:
+        mask = np.isin(y_raw, list(positive_labels))
+        if not np.any(mask):
+            unique = np.unique(y_raw)
+            raise ValueError(
+                f"positive_labels={positive_labels!r} not found in y; "
+                f"unique labels: {unique[:20]!r}"
+            )
+        return mask.astype(int)
+
     if positive_label is None:
         raise ValueError("positive_label must be provided for binarization")
-
     mask = y_raw == positive_label
     if not np.any(mask):
         unique = np.unique(y_raw)
@@ -442,7 +1090,10 @@ def load_dataset(
         from scipy.sparse import issparse
         X = bunch.data.toarray() if issparse(bunch.data) else np.asarray(bunch.data)
         y_raw = np.asarray(bunch.target)
-        y = _binarize_labels(y_raw, positive_label=positive_label)
+        if spec.positive_labels is not None:
+            y = _binarize_labels(y_raw, positive_labels=spec.positive_labels)
+        else:
+            y = _binarize_labels(y_raw, positive_label=positive_label)
         feature_names = np.asarray(getattr(bunch, "feature_names", [f"x{i}" for i in range(X.shape[1])]))
         meta = {
             "dataset_id": dataset,
@@ -618,18 +1269,115 @@ def load_dataset(
         }
         return X, y, feature_names, meta
 
-    if spec.kind == "uci_musk":
-        X, y, feature_names = _load_musk_v1()
-        # Binarize: clase positiva = 1 (musk), negativa = 0 (non-musk)
+    if spec.kind in ("uci_musk", "uci_musk_v2"):
+        loader = _load_musk_v2 if spec.kind == "uci_musk_v2" else _load_musk_v1
+        X, y, feature_names = loader()
         effective_positive_label = positive_label if positive_label is not None else 1
         if effective_positive_label != 1:
-            # Permitir invertir la clase si se quiere
             y = (y == effective_positive_label).astype(int)
         meta = {
             "dataset_id": dataset,
             "kind": spec.kind,
             "description": spec.description,
             "positive_label": effective_positive_label,
+        }
+        return X, y, feature_names, meta
+
+    if spec.kind == "synthetic_isotropic":
+        X, y, feature_names = _generate_synthetic_isotropic(spec)
+        n_pos = int(y.sum())
+        n_neg = int((y == 0).sum())
+        print(
+            f"  [synthetic_isotropic] {spec.n_samples} muestras | {spec.n_features} features "
+            f"({spec.n_informative} inform. d={spec.d_informative_range} MI~0.08-0.12 | "
+            f"{spec.n_features - spec.n_informative} ruido d={spec.d_noise_range} MI~0.04-0.08) | "
+            f"pos={n_pos} neg={n_neg}"
+        )
+        meta = {
+            "dataset_id": dataset,
+            "kind": spec.kind,
+            "description": spec.description,
+            "positive_label": 1,
+            "n_informative": spec.n_informative,
+            "n_noise": spec.n_features - spec.n_informative,
+            "d_informative_range": str(spec.d_informative_range),
+            "d_noise_range": str(spec.d_noise_range),
+        }
+        return X, y, feature_names, meta
+
+    if spec.kind == "automl_challenge":
+        import os
+
+        data_dir = os.path.join("data", dataset)
+        data_file = os.path.join(data_dir, f"{dataset}_train.data")
+        labels_file = os.path.join(data_dir, f"{dataset}_train.solution")
+
+        if not os.path.exists(data_file):
+            raise FileNotFoundError(
+                f"Local data file not found: {data_file}\n"
+                f"Download the dataset and place it in {data_dir}/"
+            )
+
+        X = np.loadtxt(data_file, dtype=np.float32)
+        y = np.loadtxt(labels_file, dtype=int)
+        feature_names = np.asarray([f"x{i}" for i in range(X.shape[1])])
+        meta = {
+            "dataset_id": dataset,
+            "kind": spec.kind,
+            "description": spec.description,
+            "positive_label": 1,
+        }
+        return X, y, feature_names, meta
+
+    if spec.kind == "uci_phishing":
+        X, y_raw, feature_names = _load_phishing_websites()
+        y = _binarize_labels(y_raw, positive_label=positive_label)
+        meta = {
+            "dataset_id": dataset,
+            "kind": spec.kind,
+            "description": spec.description,
+            "positive_label": positive_label,
+        }
+        return X, y, feature_names, meta
+
+    if spec.kind == "uci_internet_ads":
+        X, y_raw, feature_names = _load_internet_ads()
+        y = _binarize_labels(y_raw, positive_label=positive_label)
+        meta = {
+            "dataset_id": dataset,
+            "kind": spec.kind,
+            "description": spec.description,
+            "positive_label": positive_label,
+        }
+        return X, y, feature_names, meta
+
+    if spec.kind == "libsvm_epsilon":
+        from src import config as _cfg
+        max_samples = getattr(_cfg, "MAX_SAMPLES", None)
+        X, y, feature_names = _load_epsilon_libsvm(max_samples=max_samples)
+        meta = {
+            "dataset_id": dataset,
+            "kind": spec.kind,
+            "description": spec.description,
+            "positive_label": 1,
+        }
+        return X, y, feature_names, meta
+
+    if spec.kind == "uci_nips2003":
+        X, y, feature_names = _load_nips2003(
+            dataset_name=dataset,
+            uci_id=spec.uci_id,
+            n_features=spec.n_features,
+            fmt=spec.nips_format,
+            uci_zip_name=spec.uci_zip_name,
+        )
+        meta = {
+            "dataset_id": dataset,
+            "kind": spec.kind,
+            "description": spec.description,
+            "positive_label": 1,
+            "uci_id": spec.uci_id,
+            "nips_format": spec.nips_format,
         }
         return X, y, feature_names, meta
 
@@ -640,8 +1388,19 @@ def load_dataset_from_config() -> Tuple[np.ndarray, np.ndarray, np.ndarray, Dict
     """Convenience wrapper: loads dataset using values in src.config."""
     from src import config
 
-    return load_dataset(
+    X, y, feature_names, meta = load_dataset(
         config.DATASET,
         positive_label_override=getattr(config, "DATASET_POSITIVE_LABEL", None),
         gas_positive_class=getattr(config, "GAS_POSITIVE_CLASS", 1),
     )
+
+    max_samples = getattr(config, "MAX_SAMPLES", None)
+    if max_samples is not None and X.shape[0] > max_samples:
+        n_original = X.shape[0]
+        rng = np.random.RandomState(getattr(config, "RANDOM_STATE", 42))
+        idx = np.sort(rng.choice(n_original, size=max_samples, replace=False))
+        X, y = X[idx], y[idx]
+        meta["n_original"] = n_original
+        print(f"  [subsample] {X.shape[0]} muestras de {n_original} (MAX_SAMPLES={max_samples})")
+
+    return X, y, feature_names, meta
