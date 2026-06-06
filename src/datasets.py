@@ -30,6 +30,9 @@ class DatasetSpec:
     uci_id: int = 0
     nips_format: str = ""   # 'dense' | 'sparse_kv' | 'sparse_binary'
     uci_zip_name: str = ""  # nombre del ZIP en UCI (sin .zip); si vacío usa la clave del dataset
+    # Parámetros exclusivos para kind='moleculenet_tox21'
+    tox21_task: str = "NR-AR"  # tarea de toxicología: NR-AR, NR-AR-LBD, NR-AhR, NR-Aromatase,
+                                # NR-ER, NR-ER-LBD, NR-PPAR-gamma, SR-ARE, SR-ATAD5, SR-HSE, SR-MMP, SR-p53
 
 
 _DATASETS: Dict[str, DatasetSpec] = {
@@ -297,6 +300,44 @@ _DATASETS: Dict[str, DatasetSpec] = {
         uci_zip_name="madelon",
         positive_label=1,
         description="Madelon NIPS-2003 extenso - 4400 muestras, 500 features (5 clave + 15 redund. + 480 ruido, UCI completo)",
+    ),
+    # ── MoleculeNet Tox21 (ECFP4 fingerprints) ──────────────────────────────────
+    # 7831 compuestos, 2048 features binarias (ECFP4 radius=2).
+    # Cada bit = presencia/ausencia de una subestructura circular en la molécula.
+    # Estructura idéntica a bag-of-words: sparse binario de alta dimensión.
+    # 12 tareas de toxicología binarias independientes (receptores nucleares + estrés).
+    # Origen: Tox21 Data Challenge 2014 / MoleculeNet benchmark (Wu et al. 2018).
+    # Requiere: pip install rdkit
+    "tox21": DatasetSpec(
+        kind="moleculenet_tox21",
+        tox21_task="NR-AR",
+        positive_label=1,
+        description="Tox21 MoleculeNet - ~7800 compuestos, 2048 features ECFP4 binarias (NR-AR: androgenic receptor)",
+    ),
+    "tox21_sr_mmp": DatasetSpec(
+        kind="moleculenet_tox21",
+        tox21_task="SR-MMP",
+        positive_label=1,
+        description="Tox21 SR-MMP - ~7800 compuestos, 2048 features ECFP4 binarias (stress response mitochondrial membrane potential)",
+    ),
+    "tox21_nr_ahr": DatasetSpec(
+        kind="moleculenet_tox21",
+        tox21_task="NR-AhR",
+        positive_label=1,
+        description="Tox21 NR-AhR - ~7800 compuestos, 2048 features ECFP4 binarias (aryl hydrocarbon receptor)",
+    ),
+    # ── DREBIN Android Malware ───────────────────────────────────────────────────
+    # ~5560 malware + ~123K goodware (según subset disponible), ~500K features binarias.
+    # Features: presencia/ausencia de API calls, permisos, intents, actividades en APK.
+    # Estructura: cada muestra es un conjunto de strings de features → matriz binaria.
+    # Origen: Arp et al. 2014, "DREBIN: Effective and Explainable Detection of Android Malware".
+    # Descarga (requiere registro): https://drebin.mlsec.org/
+    # Coloca los archivos en: data/drebin/malware/ y data/drebin/goodware/
+    # (un archivo .txt por muestra, una feature por línea)
+    "drebin": DatasetSpec(
+        kind="drebin",
+        positive_label=1,
+        description="DREBIN Android Malware - ~5K malware vs goodware, ~500K features binarias (API calls, permisos)",
     ),
     # Raw microarray MAT files
     "cns": DatasetSpec(
@@ -1034,6 +1075,197 @@ def _load_nips2003(
     return X, y, feature_names
 
 
+def _load_tox21(task: str = "NR-AR") -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Carga Tox21 con fingerprints ECFP4 (2048 bits binarios).
+
+    Descarga el CSV desde DeepChem/AWS (caché en data/tox21/).
+    7831 compuestos, 2048 features binarias (ECFP4 radius=2).
+    Requiere: pip install rdkit
+    """
+    import os, gzip, csv, urllib.request
+
+    try:
+        from rdkit import Chem
+        from rdkit.Chem import AllChem
+    except ImportError:
+        raise ImportError(
+            "RDKit es necesario para cargar Tox21.\n"
+            "Instala con: pip install rdkit\n"
+            "O con conda: conda install -c conda-forge rdkit"
+        )
+
+    cache_dir = os.path.join("data", "tox21")
+    os.makedirs(cache_dir, exist_ok=True)
+    csv_path = os.path.join(cache_dir, "tox21.csv")
+
+    if not os.path.exists(csv_path):
+        url = "https://deepchemdata.s3-us-west-1.amazonaws.com/datasets/tox21.csv.gz"
+        gz_path = csv_path + ".gz"
+        print(f"Descargando Tox21 desde DeepChem S3...")
+        try:
+            urllib.request.urlretrieve(url, gz_path)
+        except Exception as e:
+            raise RuntimeError(
+                f"Error descargando Tox21:\n{e}\n"
+                f"Descarga manual desde: {url}\n"
+                f"Guarda el archivo descomprimido en: {os.path.abspath(csv_path)}"
+            )
+        with gzip.open(gz_path, "rb") as f_in, open(csv_path, "wb") as f_out:
+            f_out.write(f_in.read())
+        os.remove(gz_path)
+        print(f"  Descarga completada: {csv_path}")
+
+    # Caché de fingerprints para no recomputar con RDKit cada vez
+    cache_X = os.path.join(cache_dir, f"X_ecfp4_{task.replace('-', '_')}.npy")
+    cache_y = os.path.join(cache_dir, f"y_{task.replace('-', '_')}.npy")
+
+    if os.path.exists(cache_X) and os.path.exists(cache_y):
+        print(f"  [tox21/{task}] Cargando fingerprints desde caché...")
+        X = np.load(cache_X)
+        y = np.load(cache_y)
+        feature_names = np.array([f"ecfp4_{i}" for i in range(2048)])
+        print(
+            f"  [tox21/{task}] {X.shape[0]} compuestos | 2048 features ECFP4 "
+            f"| pos={int((y == 1).sum())} neg={int((y == 0).sum())}"
+        )
+        return X, y, feature_names
+
+    # Leer CSV
+    with open(csv_path, newline="", encoding="utf-8") as fh:
+        reader = csv.DictReader(fh)
+        headers = list(reader.fieldnames or [])
+        rows = list(reader)
+
+    tox_tasks = [h for h in headers if h not in ("smiles", "mol_id")]
+    if task not in tox_tasks:
+        raise ValueError(
+            f"Tarea '{task}' no disponible.\nTareas en Tox21: {tox_tasks}"
+        )
+
+    # Filtrar filas con label no vacío
+    valid_rows = [r for r in rows if r[task].strip() not in ("", "nan")]
+
+    fps, y_list = [], []
+    for r in valid_rows:
+        mol = Chem.MolFromSmiles(r["smiles"])
+        if mol is None:
+            continue
+        fp = AllChem.GetMorganFingerprintAsBitVect(mol, radius=2, nBits=2048)
+        fps.append(np.array(fp, dtype=np.float32))
+        y_list.append(int(float(r[task])))
+
+    X = np.stack(fps).astype(np.float32)
+    y = np.array(y_list, dtype=int)
+
+    np.save(cache_X, X)
+    np.save(cache_y, y)
+
+    feature_names = np.array([f"ecfp4_{i}" for i in range(2048)])
+    print(
+        f"  [tox21/{task}] {X.shape[0]} compuestos | 2048 features ECFP4 "
+        f"| pos={int((y == 1).sum())} neg={int((y == 0).sum())}"
+    )
+    return X, y, feature_names
+
+
+def _load_drebin() -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Carga DREBIN: detección de malware Android con features binarias.
+
+    Formato esperado en data/drebin/:
+      malware/   → archivos .txt (uno por APK), cada línea es el nombre de una feature
+      goodware/  → archivos .txt (goodware/benign), mismo formato
+
+    La primera vez construye la matriz binaria y la guarda como caché NPZ.
+
+    Descarga (requiere registro): https://drebin.mlsec.org/
+    Alternativa pública (subset): https://github.com/MLDroid/drebin_work
+    """
+    import os
+
+    cache_dir = os.path.join("data", "drebin")
+    npz_cache = os.path.join(cache_dir, "drebin_features.npz")
+
+    if os.path.exists(npz_cache):
+        print(f"  [drebin] Cargando desde caché ({npz_cache})...")
+        data = np.load(npz_cache, allow_pickle=True)
+        X = data["X"].astype(np.float32)
+        y = data["y"].astype(int)
+        feature_names = data["feature_names"]
+        print(
+            f"  [drebin] {X.shape[0]} muestras | {X.shape[1]} features "
+            f"| malware={int((y == 1).sum())} goodware={int((y == 0).sum())}"
+        )
+        return X, y, feature_names
+
+    malware_dir = os.path.join(cache_dir, "malware")
+    goodware_dir = os.path.join(cache_dir, "goodware")
+
+    if not os.path.exists(malware_dir) or not os.path.exists(goodware_dir):
+        raise FileNotFoundError(
+            f"DREBIN dataset no encontrado en {os.path.abspath(cache_dir)}/\n"
+            f"Descarga (requiere registro): https://drebin.mlsec.org/\n"
+            f"Alternativa pública (subset): https://github.com/MLDroid/drebin_work\n\n"
+            f"Coloca los archivos de features en:\n"
+            f"  {os.path.abspath(malware_dir)}/   (un .txt por muestra malware)\n"
+            f"  {os.path.abspath(goodware_dir)}/  (un .txt por muestra goodware)\n"
+            f"Cada archivo: una feature por línea (nombre de API call / permiso / intent)."
+        )
+
+    def read_sample(fpath: str) -> set:
+        with open(fpath, "r", encoding="utf-8", errors="replace") as f:
+            return {line.strip() for line in f if line.strip()}
+
+    malware_files = sorted(
+        os.path.join(malware_dir, f) for f in os.listdir(malware_dir) if f.endswith(".txt")
+    )
+    goodware_files = sorted(
+        os.path.join(goodware_dir, f) for f in os.listdir(goodware_dir) if f.endswith(".txt")
+    )
+
+    if not malware_files or not goodware_files:
+        raise FileNotFoundError(
+            f"No se encontraron archivos .txt en {malware_dir} o {goodware_dir}."
+        )
+
+    print(f"  [drebin] Leyendo {len(malware_files)} malware + {len(goodware_files)} goodware...")
+    all_features: set = set()
+    samples: list = []
+    labels: list = []
+
+    for fpath in malware_files:
+        feats = read_sample(fpath)
+        samples.append(feats)
+        labels.append(1)
+        all_features.update(feats)
+
+    for fpath in goodware_files:
+        feats = read_sample(fpath)
+        samples.append(feats)
+        labels.append(0)
+        all_features.update(feats)
+
+    feature_list = sorted(all_features)
+    feat_idx = {f: i for i, f in enumerate(feature_list)}
+    n_feat = len(feature_list)
+
+    print(f"  [drebin] Construyendo matriz binaria ({len(samples)} x {n_feat})...")
+    X = np.zeros((len(samples), n_feat), dtype=np.float32)
+    for i, feats in enumerate(samples):
+        for feat in feats:
+            X[i, feat_idx[feat]] = 1.0
+
+    y = np.array(labels, dtype=int)
+    feature_names = np.array(feature_list)
+
+    np.savez_compressed(npz_cache, X=X, y=y, feature_names=feature_names)
+    print(f"  [drebin] Caché guardada → {npz_cache}")
+    print(
+        f"  [drebin] {X.shape[0]} muestras | {n_feat} features "
+        f"| malware={int((y == 1).sum())} goodware={int((y == 0).sum())}"
+    )
+    return X, y, feature_names
+
+
 def _binarize_labels(y_raw: np.ndarray, *,
                      positive_label: Any = None,
                      positive_labels: Any = None) -> np.ndarray:
@@ -1378,6 +1610,27 @@ def load_dataset(
             "positive_label": 1,
             "uci_id": spec.uci_id,
             "nips_format": spec.nips_format,
+        }
+        return X, y, feature_names, meta
+
+    if spec.kind == "moleculenet_tox21":
+        X, y, feature_names = _load_tox21(task=spec.tox21_task)
+        meta = {
+            "dataset_id": dataset,
+            "kind": spec.kind,
+            "description": spec.description,
+            "positive_label": 1,
+            "tox21_task": spec.tox21_task,
+        }
+        return X, y, feature_names, meta
+
+    if spec.kind == "drebin":
+        X, y, feature_names = _load_drebin()
+        meta = {
+            "dataset_id": dataset,
+            "kind": spec.kind,
+            "description": spec.description,
+            "positive_label": 1,
         }
         return X, y, feature_names, meta
 

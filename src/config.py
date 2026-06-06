@@ -30,7 +30,14 @@ SWEEP_MODE = 'alpha'  # 'alpha' o 'percent'
 #   - Libsvm: gas_sensor_drift
 #   - Microarray (GEO): colon_cancer, prostate_cancer, lung_cancer
 #   - MAT files: cns, dlbcl
-DATASET = "gisette_extenso"  # Cambia esto para elegir el dataset a usar (ver opciones arriba)
+#   - Cheminformatics (ECFP4 fingerprints binarias, sparse, requiere rdkit):
+#       tox21          → ~7800 compuestos, 2048 features ECFP4 binarias (NR-AR)
+#       tox21_sr_mmp   → ~7800 compuestos, 2048 features ECFP4 binarias (SR-MMP)
+#       tox21_nr_ahr   → ~7800 compuestos, 2048 features ECFP4 binarias (NR-AhR)
+#   - Malware (features binarias de API calls/permisos, requiere descarga manual):
+#       drebin         → ~5K malware+goodware, ~500K features binarias (Arp et al. 2014)
+#                        Descarga: https://drebin.mlsec.org/  (requiere registro)
+DATASET = "tox21"  # Cambia esto para elegir el dataset a usar (ver opciones arriba)
 
 # Opcional: fuerza la etiqueta considerada como positiva en datasets OpenML
 # (si es None, se usa el valor por defecto del registry en src/datasets.py)
@@ -63,9 +70,9 @@ TOP_Q_PERCENT_VALUES = [5, 20, 30, 50, 100]  # Porcentajes a evaluar (usado en m
 NOISE_LEVEL = 0
 
 # Parámetros generales
-TOP_K = 100  # Número de features top-K para evaluar overlap/AUC
+TOP_K = 25  # Número de features top-K para evaluar overlap/AUC
 EXPERIMENT_NAME = DATASET
-RUN_NAME = "alphas pequeños TOP-100"  # Nombre del run (cambia esto para diferenciar los runs en mlflow)
+RUN_NAME = "alphas pequeños TOP-25"  # Nombre del run (cambia esto para diferenciar los runs en mlflow)
 
 # ── Paleta de colores canónica para todas las gráficas ────────────────────────
 # Usada en _sweep_alpha, _sweep_percent y cualquier plot futuro.
