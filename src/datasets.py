@@ -339,6 +339,17 @@ _DATASETS: Dict[str, DatasetSpec] = {
         positive_label=1,
         description="DREBIN Android Malware - ~5K malware vs goodware, ~500K features binarias (API calls, permisos)",
     ),
+    # ── KDD Cup 1999 (Intrusion Detection) ──────────────────────────────────────
+    # ~494K muestras (10% subset), 41 features originales (3 categóricas + 38 numéricas).
+    # Tras OHE de protocol_type, service, flag: ~118 features totales.
+    # Binarizado: 'normal.' = negativo (0), cualquier ataque = positivo (1).
+    # Ataques ≈ 80% del subset 10% → tasa de positivos alta.
+    # Origen: UCI KDD Archive / sklearn.datasets.fetch_kddcup99
+    "kddcup99": DatasetSpec(
+        kind="kddcup99",
+        positive_label=1,
+        description="KDD Cup 1999 (10% subset) - ~494K muestras, 41 features originales (3 categ. OHE + 38 num.), normal=0 vs ataque=1",
+    ),
     # Raw microarray MAT files
     "cns": DatasetSpec(
         kind="mat",
@@ -1258,10 +1269,95 @@ def _load_drebin() -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     feature_names = np.array(feature_list)
 
     np.savez_compressed(npz_cache, X=X, y=y, feature_names=feature_names)
-    print(f"  [drebin] Caché guardada → {npz_cache}")
+    print(f"  [drebin] Cache guardada: {npz_cache}")
     print(
         f"  [drebin] {X.shape[0]} muestras | {n_feat} features "
         f"| malware={int((y == 1).sum())} goodware={int((y == 0).sum())}"
+    )
+    return X, y, feature_names
+
+
+def _load_kddcup99(max_samples: Optional[int] = None) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Carga KDD Cup 1999 (10% subset) desde sklearn.datasets.
+
+    ~494021 muestras, 41 features originales:
+      - 3 categóricas (protocol_type, service, flag) → One-Hot Encoding
+      - 38 numéricas (duration, src_bytes, dst_bytes, ...)
+    Tras OHE: 38 + ~80 = ~118 features totales (varía según valores únicos presentes).
+    Binarizado: 'normal.' = 0, cualquier tipo de ataque = 1.
+    Caché: data/kddcup99/kddcup99_10pct.npz
+    """
+    import os
+    from sklearn.datasets import fetch_kddcup99
+    from sklearn.preprocessing import OneHotEncoder
+
+    cache_dir = os.path.join("data", "kddcup99")
+    os.makedirs(cache_dir, exist_ok=True)
+    npz_cache = os.path.join(cache_dir, "kddcup99_10pct.npz")
+
+    if os.path.exists(npz_cache):
+        print(f"  [kddcup99] Cargando desde caché ({npz_cache})...")
+        data = np.load(npz_cache, allow_pickle=True)
+        X = data["X"].astype(np.float32)
+        y = data["y"].astype(int)
+        feature_names = data["feature_names"]
+        n_normal = int((y == 0).sum())
+        n_attack = int((y == 1).sum())
+        print(
+            f"  [kddcup99] {X.shape[0]} muestras | {X.shape[1]} features "
+            f"| normal={n_normal} ataque={n_attack} alpha_real={n_attack / len(y):.2f}"
+        )
+        return X, y, feature_names
+
+    print("  [kddcup99] Descargando KDD Cup 99 (10% subset) desde sklearn...")
+    bunch = fetch_kddcup99(percent10=True, as_frame=True)
+
+    import pandas as pd
+    df: pd.DataFrame = bunch.frame
+    target_col = bunch.target.name if hasattr(bunch.target, "name") else "labels"
+
+    y_raw = bunch.target.values
+    y_raw_str = np.array([
+        v.decode("utf-8").strip() if isinstance(v, bytes) else str(v).strip()
+        for v in y_raw
+    ])
+
+    # ── Features ────────────────────────────────────────────────────────────────
+    X_df = bunch.data
+
+    CAT_COLS = ["protocol_type", "service", "flag"]
+    num_cols = [c for c in X_df.columns if c not in CAT_COLS]
+    cat_cols_present = [c for c in CAT_COLS if c in X_df.columns]
+
+    X_num = X_df[num_cols].values.astype(np.float32)
+
+    # One-Hot Encode categorical features
+    X_cat_raw = X_df[cat_cols_present].values
+    X_cat_str = np.array([[
+        v.decode("utf-8") if isinstance(v, bytes) else str(v)
+        for v in row
+    ] for row in X_cat_raw])
+
+    enc = OneHotEncoder(sparse_output=False, handle_unknown="ignore", dtype=np.float32)
+    X_cat = enc.fit_transform(X_cat_str)
+
+    cat_feature_names = list(enc.get_feature_names_out(cat_cols_present))
+    num_feature_names = list(num_cols)
+
+    X = np.concatenate([X_num, X_cat], axis=1)
+    feature_names = np.array(num_feature_names + cat_feature_names)
+
+    # ── Binarizar etiquetas: 'normal.' → 0, resto → 1 ──────────────────────────
+    y = (y_raw_str != "normal.").astype(int)
+
+    np.savez_compressed(npz_cache, X=X, y=y, feature_names=feature_names)
+    print(f"  [kddcup99] Cache guardada: {npz_cache}")
+
+    n_normal = int((y == 0).sum())
+    n_attack = int((y == 1).sum())
+    print(
+        f"  [kddcup99] {X.shape[0]} muestras | {X.shape[1]} features "
+        f"| normal={n_normal} ataque={n_attack} alpha_real={n_attack / len(y):.2f}"
     )
     return X, y, feature_names
 
@@ -1626,6 +1722,16 @@ def load_dataset(
 
     if spec.kind == "drebin":
         X, y, feature_names = _load_drebin()
+        meta = {
+            "dataset_id": dataset,
+            "kind": spec.kind,
+            "description": spec.description,
+            "positive_label": 1,
+        }
+        return X, y, feature_names, meta
+
+    if spec.kind == "kddcup99":
+        X, y, feature_names = _load_kddcup99()
         meta = {
             "dataset_id": dataset,
             "kind": spec.kind,

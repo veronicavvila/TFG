@@ -26,6 +26,8 @@ SWEEP_MODE = 'alpha'  # 'alpha' o 'percent'
 #       jasmine           → 2984 muestras, 144 features (AutoML Challenge 2)
 #       phishing_websites → 11055 muestras, 30 features (UCI, phishing=-1 vs legitimo=1)
 #       internet_ads      → 3279 muestras, 1558 features (3 cont. + 1555 bin.), alpha≈0.14
+#   - Intrusión (IDS):
+#       kddcup99       → ~494K muestras, 41 features orig. (3 categ. OHE + 38 num. ≈118 tras OHE), ataque=1 vs normal=0
 #   - Sklearn: breast_cancer
 #   - Libsvm: gas_sensor_drift
 #   - Microarray (GEO): colon_cancer, prostate_cancer, lung_cancer
@@ -37,7 +39,7 @@ SWEEP_MODE = 'alpha'  # 'alpha' o 'percent'
 #   - Malware (features binarias de API calls/permisos, requiere descarga manual):
 #       drebin         → ~5K malware+goodware, ~500K features binarias (Arp et al. 2014)
 #                        Descarga: https://drebin.mlsec.org/  (requiere registro)
-DATASET = "tox21"  # Cambia esto para elegir el dataset a usar (ver opciones arriba)
+DATASET = "kddcup99"  # Cambia esto para elegir el dataset a usar (ver opciones arriba)
 
 # Opcional: fuerza la etiqueta considerada como positiva en datasets OpenML
 # (si es None, se usa el valor por defecto del registry en src/datasets.py)
@@ -47,7 +49,7 @@ DATASET_POSITIVE_LABEL = None
 GAS_POSITIVE_CLASS = 1
 
 # Subsampling (None = sin límite; útil para datasets grandes como epsilon)
-MAX_SAMPLES = 100_000  # muestras aleatorias a usar (reproducible con RANDOM_STATE)
+MAX_SAMPLES = None  # muestras aleatorias a usar (reproducible con RANDOM_STATE)
 
 # Número de folds para KFold en modo sweep
 N_SPLITS = 3
