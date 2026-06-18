@@ -1,376 +1,62 @@
-\chapter{Introdución}
+\chapter{Introducción}
 \label{chap:introducion}
 
-\lettrine{E}{n} muchos problemas reales de aprendizaje automático, disponer de datos completamente etiquetados resulta poco realista. En teoría, los modelos supervisados asumen la existencia de ejemplos correctamente clasificados para cada una de las clases del problema; sin embargo, en la práctica, obtener esa información suele requerir procesos costosos, lentos o incluso inviables~\cite{bekker2020learning}. Mientras que identificar ejemplos positivos acostumbra a ser relativamente sencillo, usuarios que hicieron clic en un anuncio, genes previamente relacionados con una enfermedad o documentos pertenecientes a una determinada categoría, confirmar ejemplos negativos fiables resulta considerablemente más complejo. La ausencia de una etiqueta positiva no implica necesariamente que una instancia sea negativa: puede tratarse simplemente de un caso aún no identificado, no estudiado o pendiente de validación~\cite{bekker2020learning}.
+\lettrine{E}{n} muchos problemas reales de aprendizaje automático, disponer de datos completamente etiquetados resulta poco realista. En teoría, los modelos supervisados asumen la existencia de ejemplos correctamente clasificados para cada una de las clases del problema; sin embargo, en la práctica, obtener esa información suele requerir procesos costosos, lentos o incluso inviables~\cite{bekker2020learning}. Mientras que identificar ejemplos positivos acostumbra a ser relativamente sencillo - personas usuarias que hicieron clic en un anuncio, genes previamente relacionados con una enfermedad o documentos pertenecientes a una determinada categoría - confirmar ejemplos negativos fiables resulta considerablemente más complejo. La ausencia de una etiqueta positiva no implica necesariamente que una instancia sea negativa: puede tratarse simplemente de un caso aún no identificado, no estudiado o pendiente de validación~\cite{bekker2020learning}.
 
 Como consecuencia, numerosos conjuntos de datos reales presentan una estructura incompleta, formada por un pequeño subconjunto de ejemplos positivos confirmados y una gran cantidad de datos sin etiquetar cuyo estado verdadero se desconoce.
-Dentro de ese conjunto no etiquetado pueden coexistir tanto ejemplos negativos reales como positivos ocultos, introduciendo incertidumbre y dificultando el aprendizaje automático tradicional~\cite{bekker2020learning}. Este problema aparece de manera natural en múltiples contextos donde el proceso de etiquetado
-depende de validaciones humanas, pruebas experimentales o sistemas de detección imperfectos: diagnóstico de enfermedades raras, detección de fraude financiero o identificación de genes asociados a enfermedades~\cite{mordelet2014bagging} son algunos de los ejemplos
-más ampliamente estudiados en la literatura~\cite{bekker2020learning}.
+Dentro de ese conjunto no etiquetado pueden coexistir tanto ejemplos negativos reales como positivos ocultos, introduciendo incertidumbre y dificultando el aprendizaje automático tradicional~\cite{bekker2020learning}. Este problema aparece de manera natural en múltiples contextos donde el proceso de etiquetado depende de validaciones humanas, pruebas experimentales o sistemas de detección imperfectos: diagnóstico de enfermedades raras, detección de fraude financiero o identificación de genes asociados a enfermedades~\cite{mordelet2014bagging} son algunos de los ejemplos más ampliamente estudiados en la literatura~\cite{bekker2020learning}.
 
-Este escenario recibe el nombre de \textit{Positive-Unlabeled Learning}
-(PU~Learning) y plantea un reto importante: los datos no etiquetados no pueden tratarse automáticamente como ejemplos negativos sin introducir errores sistemáticos en el aprendizaje~\cite{elkan2008learning}. Cuando un modelo asume incorrectamente que todas las instancias no etiquetadas pertenecen a la clase negativa, parte de la información real queda distorsionada, generando sesgos que afectan tanto al entrenamiento como a la interpretación posterior de los resultados.
+Este escenario recibe el nombre de \acrfull{pu} y plantea un reto importante: los datos no etiquetados no pueden tratarse automáticamente como ejemplos negativos sin introducir errores sistemáticos en el aprendizaje~\cite{elkan2008learning}. En este contexto se denota habitualmente como $\alpha$ la fracción de positivos reales que efectivamente aparecen etiquetados, de modo que valores bajos de $\alpha$ implican una mayor proporción de positivos ocultos entre los datos no etiquetados. Cuando un modelo asume incorrectamente que todas las instancias no etiquetadas pertenecen a la clase negativa, enfoque conocido habitualmente como \textit{Naive}~\cite{furmanczyk2023double, ward2009presence}, parte de la información real queda distorsionada, generando sesgos que afectan tanto al entrenamiento como a la interpretación posterior de los resultados.
 
-Dentro de este contexto, la selección de características constituye una etapa especialmente relevante. La \textit{feature selection} consiste en identificar qué variables de un conjunto de datos aportan realmente información útil para resolver un problema de clasificación~\cite{guyon2003introduction}. En escenarios de alta dimensionalidad, como \textit{datasets} biomédicos, genómicos o problemas con cientos o miles de variables, muchas características pueden resultar redundantes, irrelevantes o incluso perjudiciales para el
-modelo~\cite{saeys2007review}. Reducir el número de variables no solo permite mejorar la eficiencia computacional, sino también aumentar la capacidad de generalización y facilitar la interpretabilidad de los resultados obtenidos.
+Dentro de este contexto, la selección de características constituye una etapa especialmente relevante. La \textit{selección de características} consiste en identificar qué variables de un conjunto de datos aportan realmente información útil para resolver un problema de clasificación~\cite{guyon2003introduction}. En escenarios de alta dimensionalidad, como conjuntos de datos biomédicos, genómicos o problemas con cientos o miles de variables, muchas características pueden resultar redundantes, irrelevantes o incluso perjudiciales para el modelo~\cite{saeys2007review}. Reducir el número de variables no solo permite mejorar la eficiencia computacional, sino también aumentar la capacidad de generalización y facilitar la interpretabilidad de los resultados obtenidos. No obstante, la mayor parte de la literatura existente en torno al aprendizaje PU se ha centrado en el desarrollo de clasificadores capaces de operar en este escenario~\cite{bekker2020learning, elkan2008learning}, dedicándose un esfuerzo considerablemente menor a proponer métodos de selección de características adaptados específicamente a este tipo de datos. Dado que la selección de características constituye una etapa importante dentro del preprocesamiento de datos, la ausencia de métodos diseñados específicamente para el escenario PU implica que, al aplicar técnicas tradicionales que consideran todas las instancias no etiquetadas como negativas, los resultados obtenidos puedan resultar sesgados.
 
-Entre las diferentes técnicas de selección de características, los métodos
-basados en Información Mutua (MI) destacan por medir directamente el grado de dependencia estadística entre cada variable y la clase objetivo, permitiendo detectar relaciones complejas más allá de dependencias lineales
-simples~\cite{peng2005feature, cover2006elements}. Sin embargo, en un escenario PU aparece una dificultad fundamental: la información utilizada para calcular dicha dependencia está incompleta y parcialmente sesgada, ya que parte de los verdaderos positivos permanecen ocultos dentro de los datos no etiquetados.
-Este trabajo propone y evalúa un método de selección de características por MI que aprovecha el marco probabilístico de Elkan y Noto~\cite{elkan2008learning} para corregir dicho sesgo y obtener rankings de características de mayor calidad.
+
+Entre las diferentes técnicas de selección de características, los métodos basados en información mutua destacan por medir directamente el grado de dependencia estadística entre cada variable y la clase objetivo, permitiendo detectar relaciones complejas más allá de dependencias lineales simples~\cite{peng2005feature, cover2006elements}. Sin embargo, en un escenario \acrshort{pu} aparece una dificultad fundamental: la información utilizada para calcular dicha dependencia está incompleta y parcialmente sesgada, ya que parte de los verdaderos positivos permanecen ocultos dentro de los datos no etiquetados.
+\textcolor{red}{[PENDIENTE DE RESULTADOS] Este trabajo propone y evalúa un método de selección de características por \acrshort{im} que aprovecha el marco probabilístico de Elkan y Noto~\cite{elkan2008learning} para corregir dicho sesgo y obtener rankings de características de mayor calidad.}
 
 \section{Objetivos}
 \label{sec:objetivos}
 
-El objetivo principal de este Trabajo de Fin de Grado es diseñar, implementar y evaluar empíricamente un método de selección de características basado en información mutua adaptado al entorno de \textit{Positive-Unlabeled Learning} (PU~Learning), con el fin de determinar si la corrección probabilística propuesta permite obtener rankings de características de mayor calidad que los métodos que ignoran la naturaleza parcial del etiquetado.
+El objetivo principal de este Trabajo de Fin de Grado es diseñar, implementar y evaluar empíricamente un método de selección de características basado en información mutua adaptado al entorno de \acrshort{pu}, con el fin de determinar si la corrección probabilística propuesta permite obtener rankings de características de mayor calidad que los métodos que ignoran la naturaleza parcial del etiquetado. En particular, se busca analizar si el método propuesto es capaz de aproximar el comportamiento obtenido en un escenario completamente supervisado, reduciendo el sesgo introducido por el etiquetado parcial y mejorando la recuperación de características relevantes frente al enfoque \textit{Naive}, especialmente en escenarios con valores bajos de $\alpha$ donde la presencia de positivos ocultos es más significativa.
 
 Para ello, se persiguen los siguientes objetivos específicos:
 
 \begin{enumerate}
 
-  \item \textbf{Revisión del estado del arte} en PU Learning y en métodos de
-  selección de características basados en información mutua, identificando las
-  limitaciones de los enfoques existentes cuando se aplican directamente a
-  datos PU~\cite{bekker2020learning, li2003learning, peng2005feature}.
+\item \textbf{Revisar el estado del arte} en aprendizaje \acrshort{pu} y en métodos de selección de características basados en información mutua, identificando las limitaciones de los enfoques existentes cuando se aplican directamente a datos \acrshort{pu}~\cite{bekker2020learning,li2003learning,peng2005feature}.
 
-  \item \textbf{Preparación de un conjunto diverso de \textit{datasets}
-  experimentales}, incluyendo conjuntos de datos sintéticos controlados,
-  \textit{benchmarks} de selección de características y \textit{datasets}
-  reales de alta dimensión, para permitir una evaluación empírica robusta y
-  reproducible.
+\item \textbf{Desarrollar un método de selección de características adaptado al contexto \acrshort{pu}}, capaz de tener en cuenta la incertidumbre asociada a los datos no etiquetados y reducir el sesgo derivado del etiquetado parcial.
 
-  \item \textbf{Implementación de la metodología propuesta}, que comprende
-  cuatro pasos encadenados:
+\item \textbf{Analizar la corrección probabilística de las etiquetas}, si hay mejora de la identificación de características relevantes respecto a enfoques que ignoran la presencia de positivos ocultos dentro de los datos no etiquetados.
 
-  \begin{enumerate}
+\item \textbf{Evaluar los rankings obtenidos}, la capacidad del método propuesto para aproximar los rankings que se obtendrían en un escenario completamente supervisado, utilizando éstos como referencia para medir la calidad de la selección realizada.
 
-    \item \textbf{Entrenamiento de un clasificador sobre datos PU para estimar
-    $P(s{=}1 \mid \mathbf{x})$.}
-    Se entrena un modelo de probabilidad calibrado, una
-    regresión logística sobre los datos disponibles, asignando la etiqueta positiva a los ejemplos
-    confirmados ($s=1$) y la negativa a los no etiquetados ($s=0$). Bajo la
-    suposición SCAR (\textit{Selected Completely At Random}), Elkan y
-    Noto~\cite{elkan2008learning} demostraron que dicho clasificador aprende una
-    puntuación proporcional a la probabilidad verdadera:
-    \[
-      \hat{P}(s{=}1 \mid \mathbf{x}) \;=\; c \cdot P(y{=}1 \mid \mathbf{x}),
-    \]
-    donde $c = P(s{=}1 \mid y{=}1)$ es la frecuencia de etiquetado, también
-    denominada parámetro $\alpha$. El clasificador produce estimaciones de
-    $\hat{P}(s{=}1 \mid \mathbf{x})$ en $[0,1]$ para cada instancia del
-    conjunto de datos.
 
-    \item \textbf{Estimación del parámetro $\alpha$ a partir de los datos
-    disponibles.}
-    El parámetro $\alpha = c = P(s{=}1 \mid y{=}1)$ representa la fracción de
-    positivos verdaderos que han sido etiquetados. Su estimación se fundamenta
-    en que, para los ejemplos positivos confirmados, $P(y{=}1 \mid \mathbf{x})
-    \approx 1$ y, por tanto, $\hat{P}(s{=}1 \mid \mathbf{x}) \approx c$.
-    Se implementan dos estimadores~\cite{elkan2008learning}:
-    \begin{itemize}
-      \item \textit{Estimador media}: $\hat{\alpha} = \mathbb{E}[\hat{P}(s{=}1
-      \mid \mathbf{x}) \mid s{=}1]$, calculado como la media de las
-      probabilidades predichas sobre el subconjunto etiquetado.
-      \item \textit{Estimador robusto}: emplea el percentil superior de dichas
-      probabilidades predichas para reducir la sensibilidad a estimaciones
-      atípicamente bajas, resultando más estable cuando el clasificador
-      base subestima sistemáticamente la probabilidad de algunos positivos.
-    \end{itemize}
+\item \textbf{Evaluar el impacto de la selección de características en el rendimiento de clasificación}, analizando el desempeño de un clasificador construido a partir de las variables seleccionadas.
 
-    \item \textbf{Corrección de las probabilidades de clase.}
-    Con $\hat{\alpha}$ conocido, la probabilidad corregida para cada instancia
-    se obtiene invirtiendo la proporcionalidad demostrada por Elkan y Noto:
-    \[
-      \hat{P}(y{=}1 \mid \mathbf{x}) \;=\;
-      \frac{\hat{P}(s{=}1 \mid \mathbf{x})}{\hat{\alpha}}.
-    \]
-    Los valores resultantes se truncan al intervalo $[0, 1]$ para garantizar su
-    validez como probabilidades. Esta señal continua sustituye a la etiqueta
-    binaria observada en el paso siguiente, permitiendo propagar la incertidumbre
-    sobre la clase verdadera en lugar de asignar etiquetas rígidas.
-
-    \item \textbf{Cálculo del ranking de características mediante MI sobre las
-    probabilidades corregidas.}
-    La información mutua entre cada característica $X_i$ y la señal corregida
-    $\hat{P}(y{=}1 \mid \mathbf{x})$. Las características se ordenan de mayor a menor puntuación de
-    MI, produciendo el ranking final utilizado para seleccionar el subconjunto
-    de variables más informativo respecto a la clase verdadera.
-
-  \end{enumerate}
-
-  \item \textbf{Comparación del método propuesto} con el enfoque
-  Naive, tratar los no etiquetados como negativos, y con la selección de
-  características sobre datos completamente etiquetados como referencia, utilizando métricas de correlación de rankings (coeficiente de
-  Spearman~\cite{spearman1904proof}) y solapamiento del \textit{top-K}.
-
-  \item \textbf{Evaluación del impacto de la selección de características} en el rendimiento de clasificación, midiendo el AUC-ROC obtenido al entrenar clasificadores utilizando las características seleccionadas por cada método~\cite{bradley1997use}.
-
+\item \textbf{Estudiar la robustez y aplicabilidad del método} sobre conjuntos de datos de distinta naturaleza, dimensionalidad y complejidad.
 \end{enumerate}
 
-Para el desarrollo de este trabajo se seguirá una metodología de refinamiento progresivo, 
+
+Para el desarrollo de este trabajo se ha seguido una metodología de refinamiento progresivo, basada en la evaluación continua de los resultados obtenidos. Este enfoque permitió adaptar diferentes aspectos durante el desarrollo del proyecto, contrastando las hipótesis planteadas con la evidencia experimental obtenida en cada etapa.
+
+La planificación temporal del trabajo se recoge en el diagrama de Gantt mostrado en la Figura~\ref{fig:gantt}. El proyecto se desarrolló entre diciembre de 2025 y junio de 2026, abarcando un periodo aproximado de siete meses y una dedicación total estimada de 350 horas. Esta dedicación incluyó tanto el estudio de la bibliografía relacionada con el aprendizaje Positive-Unlabeled y la selección de características como las actividades de desarrollo, experimentación, análisis de resultados y elaboración de la memoria.
+
+Esta estrategia de desarrollo favoreció una evaluación más rigurosa de la propuesta y permitió fundamentar las conclusiones finales a partir de un proceso de validación y mejora.
 
 
-\section{Estructura de la memoria}
+\textcolor{red}{\textbf{[PENDIENTE: añadir el diagrama de Gantt.]}}
+\section{\textcolor{red}{Estructura de la memoria}}
 \label{sec:estructura_memoria}
 
-\chapter{Materiales y métodos}
-\label{chap:materiales_metodos}
+\chapter[Aprendizaje PU]{Aprendizaje PU y selección de características}
+\label{chap:marco_teorico}
 
-\lettrine{E}{n} este capítulo se describen los materiales, herramientas y métodos utilizados para el desarrollo experimental del trabajo. En primer lugar, se presentan las bibliotecas software y los conjuntos de datos empleados en la evaluación. A continuación, se detalla la metodología seguida para la generación del escenario \acrshort{pu}, el funcionamiento del método propuesto y los criterios utilizados para comparar su comportamiento frente a distintos enfoques de referencia.
+\lettrine{L}{os} problemas de clasificación con etiquetado incompleto aparecen con frecuencia en aplicaciones reales de aprendizaje automático. En muchos dominios resulta sencillo identificar ejemplos positivos, mientras que obtener ejemplos negativos fiables requiere un proceso mucho más costoso o incluso inviable. Como consecuencia, numerosos conjuntos de datos contienen únicamente positivos confirmados junto con una gran cantidad de instancias sin etiquetar.
 
-\section{Herramientas software}
-\label{sec:software}
+Este escenario plantea importantes dificultades tanto para el entrenamiento de clasificadores como para tareas relacionadas con la interpretación de los datos, entre ellas la selección de características. Muchos métodos clásicos asumen la disponibilidad de etiquetas completas y pueden verse afectados cuando parte de la información de clase permanece oculta dentro del conjunto no etiquetado.
 
-El desarrollo experimental se ha realizado en \textbf{Python 3.11}, utilizando bibliotecas especializadas para aprendizaje automático, cálculo numérico y gestión de experimentos.
-
-\begin{itemize}
-
-  \item \textbf{scikit-learn}~\cite{pedregosa2011sklearn}.  
-  Biblioteca de aprendizaje automático de propósito general. Se utiliza para entrenar el clasificador \acrshort{pu} (regresión logística), para la estimación de \acrshort{mi} (\texttt{mutual\_info\_regression}, basada en el estimador \acrshort{knn} de Kraskov et~al.~\cite{kraskov2004estimating}), para la evaluación mediante \acrshort{auc}-\acrshort{roc} y para la generación del dataset sintético (\texttt{make\_\allowbreak classification}).
-
-  \item \textbf{NumPy}~\cite{harris2020array}.  
-  Biblioteca de cálculo numérico sobre la que se apoyan todas las operaciones matriciales: cálculo de rankings, corrección de probabilidades, cómputo de métricas y manipulación de arrays de resultados.
-
-  \item \textbf{pandas}.  
-  Utilizado para la gestión y exportación de resultados tabulares (rankings de características, métricas por semilla y por valor de $\alpha$) en formato \acrshort{csv}.
-
-  \item \textbf{SciPy}~\cite{virtanen2020scipy}.  
-  Empleado para la carga de archivos \texttt{.mat} (datasets de microarray en formato MATLAB) y para el cálculo del coeficiente de correlación de Spearman (\texttt{scipy.\allowbreak stats.\allowbreak spearmanr}).
-
-  \item \textbf{MLflow}~\cite{zaharia2018mlflow}.  
-  Plataforma de seguimiento de experimentos. Se usa para registrar automáticamente hiperparámetros, métricas y artefactos (rankings en \acrshort{csv}) de cada ejecución, facilitando la trazabilidad y comparación entre configuraciones experimentales.
-
-\end{itemize}
-
-\section{Conjuntos de datos}
-\label{sec:datasets}
-
-Con el objetivo de evaluar el comportamiento del método propuesto en distintos escenarios, se han seleccionado varios conjuntos de datos con diferentes niveles de dimensionalidad, tamaño muestral y complejidad. Los experimentos incluyen \textit{benchmarks} clásicos de selección de características, datasets de clasificación general y datasets de microarray de alta dimensión, donde la selección de variables resulta especialmente relevante. En todos los casos, la clase positiva se define previamente (véase la Tabla~\ref{tab:datasets}) y el escenario \acrshort{pu} se genera artificialmente a partir de los datos completamente etiquetados mediante el proceso descrito en la Sección~\ref{sec:configuracion_pu}.
-
-% ── 2.2.1 Benchmarks ─────────────────────────────────────────────────────────
-\subsection{Benchmarks de selección de características}
-\label{subsec:benchmarks}
-
-\paragraph{Madelon.}
-Dataset artificial diseñado para el \textit{NIPS 2003 Feature Selection Challenge}~\cite{guyon2004result}. Contiene 2\,000 muestras y 500 características, de las cuales únicamente 5 son informativas, 15 redundantes y el resto ruido gaussiano puro. Su elevada proporción de ruido lo convierte en un \textit{benchmark} especialmente exigente para métodos de selección de características.
-
-\paragraph{Waveform-5000.}
-Dataset sintético generado a partir del trabajo de Breiman et~al.~\cite{breiman1984cart}. Consta de 5\,000 muestras y 40 características, combinando variables informativas y ruido gaussiano. El problema original multiclase se binariza para adaptarlo al escenario de clasificación utilizado en este trabajo.
-
-\paragraph{Sintético controlado (\textit{synthetic\_pu}).}
-Dataset generado mediante \texttt{make\_\allowbreak classification} de scikit-learn~\cite{pedregosa2011sklearn}, con 3\,000 muestras y 100 características, de las cuales 15 son informativas, 5 redundantes y 80 corresponden a ruido. Este dataset permite conocer exactamente qué variables son relevantes, facilitando la evaluación objetiva de los rankings obtenidos.
-
-% ── 2.2.2 Datasets de propósito general ──────────────────────────────────────
-\subsection{Datasets de propósito general}
-\label{subsec:general}
-
-\paragraph{Musk Version 1.}
-Dataset de clasificación molecular perteneciente al repositorio \acrshort{uci}~\cite{lichman2013uci}. El objetivo consiste en distinguir moléculas con olor a almizcle (\textit{musk}) de moléculas no almizcladas (\textit{non-musk}). Contiene 476 muestras y 166 características continuas, representando un escenario de dimensionalidad moderadamente alta.
-
-% ── 2.2.3 Microarrays de alta dimensión ──────────────────────────────────────
-\subsection{Datasets de microarray de alta dimensión}
-\label{subsec:microarray}
-
-Los datasets de microarray representan el escenario más complejo desde el punto de vista de la selección de características, ya que el número de variables supera ampliamente al número de muestras ($p \gg n$). En este contexto, identificar genes relevantes resulta fundamental tanto para el rendimiento predictivo como para la interpretabilidad de los modelos.
-
-\paragraph{Colon Cancer.}
-Dataset de microarray propuesto por Alon et~al.~\cite{alon1999broad}, que contiene aproximadamente 2\,000 genes medidos sobre 62 muestras de tejido de colon humano. El problema consiste en diferenciar tejido tumoral de tejido normal, siendo uno de los datasets más utilizados en la literatura de selección de características para escenarios de alta dimensionalidad.
-
-% ── Tabla resumen ─────────────────────────────────────────────────────────────
-\begin{table}[ht]
-\centering
-\caption{Conjuntos de datos utilizados}
-\label{tab:datasets}
-\small
-\begin{tabular}{llrrrl}
-\toprule
-\textbf{Dataset} & \textbf{Tipo} & $n$ & $p$ & \%pos & \textbf{Fuente} \\
-\midrule
-madelon          & Benchmark   & 2\,000  & 500    & 50\,\% & OpenML \\
-waveform-5000    & Benchmark   & 5\,000  & 40     & 33\,\% & OpenML \\
-synthetic\_pu    & Sintético   & 3\,000  & 100    & 35\,\% & scikit-learn \\
-\midrule
-musk             & General     & 476     & 166    & 44\,\% & \acrshort{uci} \\
-\midrule
-colon\_cancer    & Microarray  & 62      & 2\,000 & 65\,\% & \acrshort{geo} \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-% ── Métodos comparados ──────────────────────────────────────────────────
-\section{Métodos de selección de características comparados}
-\label{sec:metodos_comparacion}
-
-Se comparan cuatro enfoques de selección de características que difieren en la señal utilizada para cuantificar la dependencia estadística entre las variables y la clase objetivo. Tres de ellos están basados en \acrshort{mi}~\cite{cover2006elements, peng2005feature}, una medida que captura tanto relaciones lineales como no lineales entre variables, a diferencia de estadísticos clásicos como la correlación de Pearson~\cite{battiti1994using, peng2005feature}. El cuarto es un criterio no supervisado basado en la varianza que actúa como referencia inferior. A continuación se presentan los fundamentos teóricos de cada enfoque.
-
-% ── 2.4.1 Supervisado ────────────────────────────────────────────────────
-\subsection{Selección supervisada por Información Mutua}
-\label{subsec:metodo_supervisado}
-
-El método supervisado opera bajo el supuesto ideal de que se dispone de las etiquetas de clase verdaderas $y_i \in \{0,1\}$ para todos los ejemplos del conjunto de datos. A partir de esa información completa, calcula la \acrshort{mi} entre cada característica $X_j$ y la variable de clase real $Y$:
-
-\begin{equation}
-  I_{\mathrm{sup}}(X_j;\,Y)
-  \;=\;
-  \sum_{y\in\{0,1\}}
-  \int_{\mathbb{R}}
-  p(x_j,y)\,
-  \log\!\frac{p(x_j,y)}{p(x_j)\,p(y)}\,
-  \mathrm{d}x_j,
-  \label{eq:mi_sup}
-\end{equation}
-
-donde $p(x_j,y)$ es la distribución conjunta de la característica $j$ y la clase binaria $Y$, y $p(x_j)$, $p(y)$ son sus marginales~\cite{cover2006elements}. Dado que estas distribuciones no son conocidas a priori, la \acrshort{mi} se estima de forma no paramétrica utilizando el estimador de Kraskov et~al.~\cite{kraskov2004estimating}, basado en estadísticas de $k$-vecinos más próximos (\acrshort{knn}). Este estimador presenta varias ventajas respecto a los métodos de discretización: evita la elección arbitraria de un número de intervalos o ancho de banda, produce estimaciones consistentes para variables continuas y escala de forma razonable con el número de muestras~\cite{kraskov2004estimating}.
-
-Las características se ordenan de mayor a menor valor de $I_{\mathrm{sup}}$, obteniendo el ranking de referencia. Su papel en el experimento es el de \textit{cota superior} u \textit{oracle}: cuantifica el mejor resultado alcanzable e indica en qué medida los métodos que trabajan con datos \acrshort{pu} consiguen aproximar dicha referencia~\cite{bekker2020learning}. En un escenario \acrshort{pu} real, este método no es directamente aplicable, puesto que las etiquetas de los ejemplos no etiquetados son desconocidas por definición.
-
-% ── 2.4.2 Naive ──────────────────────────────────────────────────────────
-\subsection{Método \textit{Naive}}
-\label{subsec:metodo_naive}
-
-El método \textit{Naive} constituye la línea base más directa para abordar la selección de características en un escenario \acrshort{pu}. Su premisa fundamental consiste en tratar el conjunto no etiquetado $\mathcal{U}$ como si estuviese íntegramente formado por ejemplos negativos, de modo que la señal de clase empleada en el cálculo es la variable de etiquetado observada $S$:
-
-\begin{equation}
-  I_{\mathrm{naive}}(X_j;\,S)
-  \;=\;
-  \sum_{s\in\{0,1\}}
-  \int_{\mathbb{R}}
-  p(x_j,s)\,
-  \log\!\frac{p(x_j,s)}{p(x_j)\,p(s)}\,
-  \mathrm{d}x_j.
-  \label{eq:mi_naive}
-\end{equation}
-
-La estimación se realiza de nuevo con el estimador de Kraskov et~al.~\cite{kraskov2004estimating}. La sencillez de este enfoque lo ha convertido en el punto de partida habitual en la literatura de \acrshort{pu}~Learning cuando no se dispone de métodos específicos~\cite{bekker2020learning, li2003learning}.
-
-La limitación principal del método \textit{Naive} es el sesgo sistemático que introduce en la estimación de la \acrshort{mi} cuando existen positivos ocultos en $\mathcal{U}$. Bajo la hipótesis \acrshort{scar}, la proporción de positivos verdaderos dentro del conjunto no etiquetado puede derivarse aplicando el teorema de Bayes:
-
-\begin{equation}
-  P(y=1 \mid s=0)
-  \;=\;
-  \frac{(1-\alpha)\,P(y=1)}{1 - \alpha\,P(y=1)},
-  \label{eq:pos_in_U}
-\end{equation}
-
-donde $\alpha = P(s=1 \mid y=1)$ es la frecuencia de etiquetado~\cite{elkan2008learning}. Esta expresión muestra que, salvo cuando $\alpha=1$, siempre existe una fracción de positivos en $\mathcal{U}$ que el método \textit{Naive} etiqueta erróneamente como negativos. Esta contaminación por falsos negativos (\textit{label noise}) distorsiona la distribución conjunta $p(x_j,s)$ y degrada la capacidad del estimador para distinguir características relevantes de irrelevantes~\cite{elkan2008learning, bekker2020learning}.
-
-La intensidad del sesgo es monótonamente decreciente en $\alpha$: a menor proporción de positivos etiquetados, mayor es la contaminación en $\mathcal{U}$ y mayor la distorsión del ranking resultante. En el límite $\alpha \to 0$, la señal $S$ pierde toda correlación con la clase verdadera $Y$ y el ranking obtenido se aproxima a uno aleatorio. En el límite $\alpha \to 1$, $S \equiv Y$ y el método \textit{Naive} converge exactamente al enfoque supervisado.
-
-% ── 2.4.3 PU-MI ──────────────────────────────────────────────────────────
-\subsection{Método \acrshort{pumi}}
-\label{subsec:metodo_pumi}
-
-El método \acrshort{pumi} constituye la aportación principal de este trabajo. Su objetivo es reducir el sesgo del enfoque \textit{Naive} aprovechando el marco probabilístico de Elkan y Noto~\cite{elkan2008learning} para obtener, a partir únicamente de datos \acrshort{pu}, una señal de relevancia más próxima a la que produciría el enfoque supervisado.
-
-La idea central consiste en sustituir la etiqueta binaria ruidosa $S$ por probabilidades continuas corregidas $\hat{p}_i \approx P(y_i=1 \mid \mathbf{x}_i)$ y calcular la \acrshort{mi} entre cada característica y dicha señal suave:
-
-\begin{equation}
-  I_{\mathrm{PU\text{-}MI}}(X_j;\,\hat{P})
-  \;=\;
-  \int_{\mathbb{R}} \int_{0}^{1}
-  p\!\left(x_j,\,\hat{p}\right)
-  \log\!\frac{p\!\left(x_j,\,\hat{p}\right)}{p(x_j)\,p(\hat{p})}\,
-  \mathrm{d}\hat{p}\,\mathrm{d}x_j,
-  \label{eq:mi_pumi}
-\end{equation}
-
-donde $\hat{P}$ es la variable aleatoria que representa las probabilidades corregidas. Al tratarse de una señal continua, la estimación se realiza con \texttt{mutual\_info\_regression} de scikit-learn~\cite{pedregosa2011sklearn}, que emplea internamente el estimador de Kraskov et~al.~\cite{kraskov2004estimating}.
-
-El procedimiento completo sigue las cuatro etapas encadenadas descritas en la Sección~\ref{sec:objetivos}:
-
-\begin{enumerate}
-
-  \item \textbf{Entrenamiento del clasificador \acrshort{pu}.} Se entrena una regresión logística calibrada sobre los datos disponibles, asignando etiqueta positiva a $\mathcal{P}$ y etiqueta negativa a $\mathcal{U}$. Bajo la hipótesis \acrshort{scar}, Elkan y Noto demostraron que el clasificador aprende una puntuación proporcional a la probabilidad real:
-  \[
-    g(\mathbf{x}) = P(s=1\mid\mathbf{x}) = \alpha \cdot P(y=1\mid\mathbf{x}).
-  \]
-
-  \item \textbf{Estimación del parámetro $\hat{\alpha}$.} Se calcula como la media de las probabilidades predichas sobre el subconjunto etiquetado:
-  \[
-    \hat{\alpha}
-    = \frac{1}{|\mathcal{P}|}
-      \sum_{\mathbf{x}_i\in\mathcal{P}} g(\mathbf{x}_i).
-  \]
-  Esta estimación es válida porque, para los positivos etiquetados, $P(y=1\mid\mathbf{x}) \approx 1$ y, por tanto, $g(\mathbf{x}) \approx \alpha$~\cite{elkan2008learning}.
-
-  \item \textbf{Corrección de las probabilidades.} Se invierte la proporcionalidad de Elkan y Noto para recuperar una aproximación de la probabilidad real de pertenencia a la clase positiva:
-  \[
-    \hat{P}(y_i=1\mid\mathbf{x}_i)
-    = \min\!\left(\frac{g(\mathbf{x}_i)}{\hat{\alpha}},\;1\right).
-  \]
-  El truncamiento a $[0,1]$ garantiza que el resultado sea una probabilidad válida.
-
-  \item \textbf{Cálculo del ranking de \acrshort{mi}.} Se calcula la \acrshort{mi} entre cada característica $X_j$ y el vector de probabilidades corregidas $\{\hat{p}_i\}_{i=1}^n$, produciendo el ranking final de relevancia.
-
-\end{enumerate}
-
-La ventaja teórica de \acrshort{pumi} frente al método \textit{Naive} radica en la calidad de la señal de clase empleada. Al utilizar probabilidades continuas que aproximan $P(y=1\mid\mathbf{x})$ en lugar de la etiqueta binaria ruidosa $S$, el estimador de \acrshort{mi} dispone de información menos sesgada, lo que le permite discriminar con mayor precisión entre características relevantes e irrelevantes. Esta mejora es especialmente significativa para valores pequeños de $\alpha$, donde la contaminación del conjunto no etiquetado es mayor y el sesgo del método \textit{Naive} más pronunciado~\cite{bekker2020learning}.
-
-% ── 2.4.4 Varianza ───────────────────────────────────────────────────────
-\subsection{Selección por Varianza}
-\label{subsec:metodo_varianza}
-
-El método de selección por varianza representa el referente no supervisado del experimento. A diferencia de los enfoques basados en \acrshort{mi}, no utiliza ninguna información de clase durante el cálculo del ranking: el criterio de relevancia se apoya exclusivamente en la dispersión estadística de cada variable. La puntuación asignada a la característica $X_j$ es su varianza muestral:
-
-\begin{equation}
-  \widehat{\mathrm{Var}}(X_j)
-  \;=\;
-  \frac{1}{n-1}
-  \sum_{i=1}^{n}
-  \bigl(x_{ij} - \bar{x}_j\bigr)^2,
-  \label{eq:varianza}
-\end{equation}
-
-donde $\bar{x}_j = n^{-1}\sum_{i=1}^n x_{ij}$ es la media muestral de la característica $j$. Las características se ordenan de mayor a menor varianza y se seleccionan las $K$ de mayor puntuación.
-
-La justificación estadística de este criterio es parcial. Una característica constante o de varianza nula no puede aportar capacidad discriminativa alguna, con independencia de la tarea de clasificación~\cite{guyon2003introduction}. Sin embargo, la relación inversa no se cumple en general: una varianza elevada indica dispersión en los datos, pero no garantiza que esa dispersión esté correlacionada con la variable de clase objetivo. Una característica de alta varianza puede ser completamente irrelevante para el problema si su variación es ortogonal a las diferencias entre clases~\cite{saeys2007review}.
-
-En el contexto \acrshort{pu}, el método de varianza tiene una propiedad adicional de interés: al no utilizar la etiqueta observada $S$, permanece inmune al sesgo introducido por el etiquetado parcial. Su comportamiento no se degrada al reducir $\alpha$, al contrario de lo que ocurre con el método \textit{Naive}. Sin embargo, esta inmunidad al sesgo se obtiene al precio de ignorar toda la información de clase disponible, lo que en la práctica conduce a rankings de menor calidad cuando $\alpha$ es suficientemente grande y los métodos basados en \acrshort{mi} pueden aprovechar la señal de etiquetado.
-
-En el diseño experimental, el método de varianza actúa como \textit{cota inferior} de referencia: permite cuantificar la ganancia marginal que aportan los métodos basados en información de clase, ya sea real (supervisado) o estimada (\textit{Naive}, \acrshort{pumi}), frente a no emplear dicha información en absoluto~\cite{guyon2003introduction, saeys2007review}.
-
-% ── Métricas de evaluación ─────────────────────────────────────────────
-\section{Métricas de evaluación}
-\label{sec:metricas}
-
-La calidad de los rankings de características obtenidos se evalúa mediante distintas métricas complementarias, orientadas tanto a medir la similitud respecto al ranking supervisado de referencia como a analizar el impacto práctico de la selección de variables sobre la tarea de clasificación.
-
-
-\paragraph{Correlación de Spearman ($\rho$).}
-La correlación de rangos de Spearman mide el grado de concordancia ordinal entre dos rankings~\cite{spearman1904proof}. En este trabajo, se utiliza para comparar el orden de relevancia de las características obtenido por cada método frente al ranking supervisado calculado utilizando las etiquetas reales.
-
-Formalmente, para dos rankings de longitud $n$, la correlación de Spearman se define como:
-
-\begin{equation}
-\rho
-=
-1-\frac{6\sum_{i=1}^{n} d_i^2}{n(n^2-1)},
-\label{eq:spearman}
-\end{equation}
-
-donde $d_i$ representa la diferencia entre las posiciones asignadas a la característica $i$ en ambos rankings.
-
-El valor de $\rho$ se encuentra en el intervalo $[-1,1]$. Valores próximos a $1$ indican una elevada concordancia entre rankings, mientras que valores cercanos a $0$ reflejan poca relación entre ellos. En el contexto de este trabajo, una correlación alta implica que el método evaluado consigue aproximar correctamente el orden de relevancia obtenido en el escenario supervisado.
-
-\paragraph{Solapamiento del top-K.}
-Además de analizar el ranking completo, resulta especialmente relevante estudiar si los métodos son capaces de recuperar las características más importantes del problema. El solapamiento del top-$K$ evalúa si dos métodos seleccionan las mismas características entre las primeras posiciones del ranking. En este trabajo se compara el conjunto de las $K$ características mejor valoradas por cada método con el conjunto de las $K$ características mejor valoradas por el enfoque supervisado.
-
-Esta métrica no tiene en cuenta el orden interno dentro del top-$K$, sino únicamente cuántas características coinciden entre ambos subconjuntos. Por tanto, resulta útil para analizar si el método evaluado recupera las variables consideradas más relevantes, aunque no necesariamente en la misma posición exacta.
-
-Valores altos de solapamiento indican que el método selecciona un subconjunto de características similar al supervisado, mientras que valores bajos reflejan que las variables seleccionadas difieren de forma importante.
-
-\paragraph{\acrshort{auc}-\acrshort{roc}.}
-Aunque las métricas anteriores permiten comparar directamente los rankings de características, también resulta importante analizar el impacto práctico de la selección realizada sobre la tarea de clasificación. Para ello, se entrena un clasificador utilizando únicamente las variables seleccionadas por cada método y se evalúa su rendimiento mediante la métrica \acrshort{auc}-\acrshort{roc}~\cite{bradley1997use}.
-
-La curva \acrshort{roc} representa la relación entre la tasa de verdaderos positivos y la tasa de falsos positivos para distintos umbrales de decisión. El área bajo dicha curva (\acrshort{auc}) proporciona una medida global de la capacidad discriminativa del clasificador.
-
-Formalmente:
-
-\[
-0 \leq \text{\acrshort{auc}} \leq 1.
-\]
-
-Valores próximos a $1$ indican una excelente capacidad de separación entre clases, mientras que valores cercanos a $0.5$ corresponden a un comportamiento equivalente al azar.
+En este trabajo se estudia la selección de características basada en información mutua en entornos \acrshort{pu}, analizando cómo el etiquetado parcial afecta al cálculo de relevancia de las variables y cómo puede corregirse mediante estimaciones probabilísticas. Para ello, en este capítulo se introducen los principales conceptos teóricos necesarios para el desarrollo posterior del método propuesto.
 
 % ============================================================
 \section{Aprendizaje supervisado tradicional}
@@ -500,7 +186,7 @@ En la práctica, la estimación de $\alpha$ resulta especialmente importante, ya
 \subsection{Definición y propiedades}
 \label{subsec:definicion_mi}
 
-La \acrfull{mi} es una medida utilizada para cuantificar la relación existente entre dos variables aleatorias~\cite{cover2006elements}. Intuitivamente, la \acrshort{mi} indica cuánto conocimiento aporta una variable sobre otra. En el contexto de selección de características, permite medir hasta qué punto una característica contiene información útil sobre la clase objetivo.
+La \acrfull{im} es una medida utilizada para cuantificar la relación existente entre dos variables aleatorias~\cite{cover2006elements}. Intuitivamente, la \acrshort{im} indica cuánto conocimiento aporta una variable sobre otra. En el contexto de selección de características, permite medir hasta qué punto una característica contiene información útil sobre la clase objetivo.
 
 Formalmente, la información mutua entre dos variables $X$ e $Y$ se define como:
 
@@ -514,9 +200,9 @@ p(x,y)\log\frac{p(x,y)}{p(x)p(y)}.
 
 donde $p(x,y)$ representa la distribución conjunta de ambas variables y $p(x)$, $p(y)$ sus distribuciones marginales~\cite{cover2006elements}.
 
-La \acrshort{mi} toma valores altos cuando existe una fuerte dependencia entre las variables, mientras que vale cero si ambas son estadísticamente independientes. A diferencia de medidas clásicas como la correlación de Pearson, la \acrshort{mi} permite detectar tanto relaciones lineales como no lineales entre variables~\cite{peng2005feature}.
+La \acrshort{im} toma valores altos cuando existe una fuerte dependencia entre las variables, mientras que vale cero si ambas son estadísticamente independientes. A diferencia de medidas clásicas como la correlación de Pearson, la \acrshort{im} permite detectar tanto relaciones lineales como no lineales entre variables~\cite{peng2005feature}.
 
-Estas propiedades han convertido a la \acrshort{mi} en uno de los criterios más utilizados en selección de características, especialmente en problemas de alta dimensionalidad y aprendizaje automático~\cite{guyon2003introduction, saeys2007review}.
+Estas propiedades han convertido a la \acrshort{im} en uno de los criterios más utilizados en selección de características, especialmente en problemas de alta dimensionalidad y aprendizaje automático~\cite{guyon2003introduction, saeys2007review}.
 
 En este trabajo, la relevancia de cada característica se calcula utilizando la implementación \texttt{mutual\_info\_regression} de scikit-learn~\cite{pedregosa2011sklearn}, basada en el estimador no paramétrico propuesto por Kraskov et al.~\cite{kraskov2004estimating}.
 
@@ -524,161 +210,927 @@ Sin embargo, en escenarios \acrshort{pu} aparece un problema importante: parte d
 
 El método propuesto en este trabajo busca reducir este problema utilizando probabilidades corregidas obtenidas mediante el marco probabilístico de Elkan y Noto~\cite{elkan2008learning}, con el objetivo de aproximar mejor la relevancia real de las características.
 
+\chapter{Metodología}
+\label{chap:metodologia_materiales}
 
-% ============================================================
-\chapter{Experimentación y resultados}
-\label{chap:experimentos}
-% ============================================================
+\lettrine{E}{ste} capítulo describe la metodología concreta seguida en el trabajo y los materiales utilizados para llevar a cabo la experimentación. Una vez introducidos los fundamentos teóricos del aprendizaje \acrshort{pu}, se presenta el procedimiento propuesto para realizar selección de características basada en \acrshort{im} en este contexto. Además, se describen los métodos utilizados como comparación, las métricas de evaluación, los datasets empleados y las herramientas software utilizadas para garantizar la trazabilidad y reproducibilidad de los experimentos.
 
-\lettrine{E}{ste} capítulo describe el diseño experimental seguido para evaluar los métodos de selección de características propuestos y analiza los resultados obtenidos. En primer lugar se presenta la configuración experimental: cómo se genera el escenario \acrshort{pu} a partir de datos completamente etiquetados, el pipeline de evaluación, el protocolo de validación cruzada y los parámetros de la experimentación.
+\section{Planteamiento metodológico general}
+\label{sec:planteamiento_metodologico}
 
-% ============================================================
-\section{Configuración experimental}
-\label{sec:configuracion_experimento}
-% ============================================================
+El objetivo metodológico de este trabajo consiste en evaluar si es posible adaptar la selección de características basada en \acrshort{im} al escenario \acrshort{pu}, donde solo se dispone de una parte de los ejemplos positivos etiquetados y el resto de instancias permanecen sin etiquetar. En un problema supervisado tradicional, la relevancia de cada característica puede estimarse directamente a partir de su dependencia con la variable de clase real $Y$. Sin embargo, en el contexto \acrshort{pu}, dicha variable no se observa completamente, ya que únicamente se conoce la variable de etiquetado $S$, que indica si una instancia positiva ha sido seleccionada como etiquetada o no.
 
-El diseño experimental se organiza en torno a un barrido sistemático de parámetros (\textit{sweep}): para cada combinación de dataset, valor del parámetro de frecuencia de etiquetado $\alpha$ y semilla aleatoria, se genera artificialmente el escenario \acrshort{pu}, se ejecuta el pipeline completo de selección de características y se evalúan los rankings resultantes mediante validación cruzada estratificada~\cite{kohavi1995study}.
+Por este motivo, la metodología propuesta se basa en transformar el problema \acrshort{pu} en una señal probabilística más cercana a la variable de clase real. Para ello, se parte del resultado de Elkan y Noto~\cite{elkan2008learning}, según el cual, bajo la hipótesis \acrshort{scar}, un clasificador entrenado para distinguir positivos etiquetados frente a no etiquetados aprende una función proporcional a la probabilidad real de pertenecer a la clase positiva. Esta relación permite obtener una estimación corregida de $P(y=1 \mid \mathbf{x})$ y utilizarla posteriormente como variable objetivo continua en el cálculo de la \acrshort{im}.
 
-% ── 3.1.1 Generación del escenario PU ────────────────────────────────────
-\subsection{Generación del escenario PU}
-\label{sec:configuracion_pu}
+La metodología completa se organiza en cuatro bloques principales. En primer lugar, se genera artificialmente el escenario \acrshort{pu} a partir de datasets completamente etiquetados. En segundo lugar, se aplica el método propuesto de selección de características, denominado \acrshort{pumi}. En tercer lugar, se comparan los rankings obtenidos frente a otros enfoques de referencia. Finalmente, se evalúa tanto la calidad de los rankings como su impacto en el rendimiento de clasificación.
 
-Dado que todos los datasets empleados disponen de etiquetas de clase completas, el escenario \acrshort{pu} se construye artificialmente a partir de las etiquetas reales $y_i \in \{0, 1\}$. Este procedimiento es estándar en la literatura de evaluación de métodos \acrshort{pu}~\cite{bekker2020learning, mordelet2014bagging}: simula el escenario en el que únicamente una fracción de los positivos verdaderos ha sido identificada y etiquetada, mientras que el resto permanece oculto dentro del conjunto no etiquetado. Conservar las etiquetas reales como referencia latente permite medir con precisión la calidad de los rankings obtenidos.
+\section[Generación del escenario]{Generación del escenario Positive--Unlabeled}
+\label{sec:generacion_pu}
 
-El proceso de generación sigue la hipótesis \acrshort{scar}~\cite{elkan2008learning}: dado el parámetro de frecuencia de etiquetado $\alpha \in (0, 1]$ y una semilla aleatoria, se selecciona uniformemente sin reemplazamiento una fracción $\alpha$ de los positivos verdaderos para recibir la etiqueta observada $S_i = 1$. El resto de los ejemplos, negativos y positivos no seleccionados, quedan marcados como no etiquetados ($S_i = 0$):
+Los datasets utilizados en este trabajo disponen originalmente de etiquetas completas $y_i \in \{0,1\}$. Esto permite construir escenarios \acrshort{pu} controlados, conservando las etiquetas reales únicamente para la evaluación posterior. Este procedimiento es habitual en la literatura, ya que permite simular distintos niveles de disponibilidad de etiquetas positivas y analizar con precisión el comportamiento de los métodos evaluados~\cite{bekker2020learning}.
+
+Dado un valor de frecuencia de etiquetado $\alpha \in (0,1]$, se selecciona aleatoriamente una fracción $\alpha$ de los ejemplos positivos reales para formar el conjunto de positivos etiquetados $\mathcal{P}$. El resto de positivos, junto con todos los negativos reales, se agrupan en el conjunto no etiquetado $\mathcal{U}$. La variable observada $S$ se define como:
 
 \begin{equation}
-  S_i =
-  \begin{cases}
-    1 & \text{si } y_i = 1 \;\text{e}\; i \in \mathcal{L}_\alpha, \\
-    0 & \text{en caso contrario,}
-  \end{cases}
-  \label{eq:pu_generation}
+S_i =
+\begin{cases}
+1, & \text{si } y_i = 1 \text{ y la instancia ha sido seleccionada como positiva etiquetada},\\
+0, & \text{en caso contrario}.
+\end{cases}
+\label{eq:generacion_s}
 \end{equation}
 
-donde $\mathcal{L}_\alpha$ es un subconjunto de tamaño $\lfloor \alpha \cdot |\{i : y_i = 1\}| \rfloor$ muestreado aleatoriamente del conjunto de positivos verdaderos. Por construcción, el escenario resultante satisface las condiciones estructurales del aprendizaje \acrshort{pu}: ningún negativo aparece etiquetado [ecuación~\eqref{eq:no_false_pos}] y la frecuencia de etiquetado real es exactamente $\alpha$ [ecuación~\eqref{eq:label_freq}]. El conjunto etiquetado $\mathcal{P} = \{\mathbf{x}_i : S_i = 1\}$ contiene únicamente positivos confirmados, mientras que el conjunto no etiquetado $\mathcal{U} = \{\mathbf{x}_i : S_i = 0\}$ mezcla negativos verdaderos con una fracción $(1-\alpha)$ de los positivos, en proporciones desconocidas para el método evaluado.
+De esta forma, $S_i=1$ implica necesariamente que $y_i=1$, mientras que $S_i=0$ no permite conocer la clase real de la instancia. El conjunto no etiquetado contiene, por tanto, una mezcla de negativos verdaderos y positivos ocultos. La selección de positivos etiquetados se realiza de forma aleatoria uniforme, siguiendo la hipótesis \acrshort{scar}, según la cual todos los positivos tienen la misma probabilidad de ser etiquetados independientemente de sus características~\cite{elkan2008learning}.
 
-% ── 3.1.2 Pipeline experimental ──────────────────────────────────────────
-\subsection{Pipeline experimental}
-\label{sec:pipeline}
+\section{Método propuesto: PU-MI}
+\label{sec:metodo_propuesto}
 
-El pipeline experimental completo se ejecuta de forma independiente para cada combinación $(\textit{dataset},\, \alpha,\, \textit{semilla})$. Las etapas, descritas a continuación, garantizan que el ranking de características nunca tiene acceso a información del conjunto de test durante su cálculo.
+El método propuesto, denominado \acrshort{pumi}, adapta la selección de características basada en \acrshort{im} al contexto \acrshort{pu}. En lugar de calcular la dependencia entre cada característica $X_j$ y la etiqueta observada $S$, como haría un enfoque directo, se calcula la dependencia entre cada característica y una estimación corregida de la probabilidad real de pertenencia a la clase positiva.
 
-\begin{enumerate}
+En primer lugar, se entrena un clasificador probabilístico $g(\mathbf{x})$ para distinguir las instancias positivas etiquetadas de las no etiquetadas:
 
-  \item \textbf{Carga y binarización del dataset.}
-  Se carga el dataset seleccionado y se binariza la variable de clase según la definición de clase positiva especificada en la Tabla~\ref{tab:datasets}. Para los datasets de mayor tamaño se aplica un submuestreo aleatorio estratificado y reproducible si se supera el límite de muestras configurado, conservando la distribución de clases.
+\begin{equation}
+g(\mathbf{x}) = P(s=1 \mid \mathbf{x}).
+\label{eq:g_pu}
+\end{equation}
 
-  \item \textbf{Generación del escenario \acrshort{pu}.}
-  A partir de las etiquetas reales $y$ y del parámetro $\alpha$, se generan las etiquetas \acrshort{pu} $S$ siguiendo el proceso de la Sección~\ref{sec:configuracion_pu}. Las etiquetas reales $y$ se conservan únicamente para el cálculo del ranking supervisado de referencia y para la evaluación final de la calidad de los rankings.
+Bajo la hipótesis \acrshort{scar}, Elkan y Noto~\cite{elkan2008learning} demuestran que esta probabilidad está relacionada con la probabilidad real de clase positiva mediante una constante $\alpha$:
 
-  \item \textbf{Entrenamiento del clasificador \acrshort{pu}.}
-  Se entrena un \textit{pipeline} compuesto por \texttt{StandardScaler} y \texttt{LogisticRegression} (regularización $L_2$, optimizador \texttt{lbfgs}, hasta 5\,000 iteraciones)~\cite{pedregosa2011sklearn} sobre el escenario \acrshort{pu} completo, asignando etiqueta positiva a $\mathcal{P}$ y negativa a $\mathcal{U}$. Bajo la hipótesis \acrshort{scar}, este clasificador aprende $g(\mathbf{x}) = P(s=1 \mid \mathbf{x}) = \alpha \cdot P(y=1 \mid \mathbf{x})$~\cite{elkan2008learning}. Se elige la regresión logística por su capacidad de producir probabilidades bien calibradas~\cite{bishop2006pattern}, propiedad esencial para la corrección posterior mediante el marco de Elkan y Noto.
+\begin{equation}
+P(s=1 \mid \mathbf{x}) = \alpha P(y=1 \mid \mathbf{x}).
+\label{eq:relacion_pu}
+\end{equation}
 
-  \item \textbf{Estimación del parámetro $\hat{\alpha}$.}
-  Se estima la frecuencia de etiquetado $\hat{\alpha}$ a partir de las puntuaciones del clasificador sobre el subconjunto etiquetado $\mathcal{P}$~\cite{elkan2008learning}. Se implementan dos variantes:
-  \begin{itemize}
-    \item \textbf{Estimador media}: $\hat{\alpha} = |\mathcal{P}|^{-1} \sum_{\mathbf{x} \in \mathcal{P}} g(\mathbf{x})$.
-    Aprovecha que, para los positivos etiquetados, $P(y=1 \mid \mathbf{x}) \approx 1$ y, por tanto, $g(\mathbf{x}) \approx \alpha$. Resulta óptimo cuando el clasificador es bien calibrado.
-    \item \textbf{Estimador robusto}: utiliza únicamente los positivos etiquetados con puntuaciones por encima del percentil $100 - q$ del conjunto $\mathcal{P}$, descartando aquellos con puntuaciones atípicamente bajas. Resulta más estable en escenarios donde el clasificador subestima sistemáticamente la probabilidad de un subconjunto de positivos~\cite{elkan2008learning}.
-  \end{itemize}
+Por tanto, si se estima la frecuencia de etiquetado $\hat{\alpha}$, puede obtenerse una aproximación de la probabilidad real:
 
-  \item \textbf{Corrección de probabilidades.}
-  Con $\hat{\alpha}$ conocido, se obtiene una estimación de la probabilidad real de pertenencia a la clase positiva para cada instancia, invirtiendo la proporcionalidad demostrada por Elkan y Noto~\cite{elkan2008learning}:
-  \[
-    \hat{P}(y_i=1 \mid \mathbf{x}_i)
-    = \min\!\left(\frac{g(\mathbf{x}_i)}{\hat{\alpha}},\;1\right).
-  \]
-  El truncamiento al intervalo $[0,1]$ garantiza la validez como probabilidad. Esta señal continua $\hat{p}_i \in [0,1]$ sustituye a la etiqueta binaria observada $S_i$ en el cálculo de la \acrshort{mi} del método \acrshort{pumi}, propagando la incertidumbre sobre la clase verdadera en lugar de asignar etiquetas rígidas.
+\begin{equation}
+\hat{P}(y=1 \mid \mathbf{x}) =
+\min\left(
+\frac{g(\mathbf{x})}{\hat{\alpha}},
+1
+\right).
+\label{eq:prob_corregida}
+\end{equation}
 
-  \item \textbf{Validación cruzada y cálculo de rankings.}
-  Se aplica una validación cruzada estratificada (véase la Sección~\ref{sec:cv_protocol}). En cada partición, los cuatro rankings se calculan exclusivamente sobre el conjunto de entrenamiento $(X_{\text{train}},\, S_{\text{train}},\, y_{\text{train}},\, \hat{p}_{\text{train}})$:
-  \begin{itemize}
-    \item \textit{Supervisado}: \acrshort{mi} entre $X_j$ e $y_{\text{train}}$, estimado con \texttt{mutual\_info\_classif}~\cite{kraskov2004estimating, pedregosa2011sklearn}.
-    \item \textit{Naive}: \acrshort{mi} entre $X_j$ y $S_{\text{train}}$, estimado con \texttt{mutual\_info\_classif}.
-    \item \textit{\acrshort{pumi}}: \acrshort{mi} entre $X_j$ y $\hat{p}_{\text{train}}$ (señal continua), estimado con \texttt{mutual\_info\_regression}.
-    \item \textit{Varianza}: varianza muestral $\widehat{\mathrm{Var}}(X_j)$ calculada sobre $X_{\text{train}}$.
-  \end{itemize}
-  El cálculo exclusivo sobre el conjunto de entrenamiento garantiza la ausencia de fuga de datos (\textit{data leakage}) entre la selección de características y la evaluación~\cite{hastie2009elements}.
+El truncamiento en 1 se introduce para asegurar que la salida se mantiene dentro del intervalo válido de una probabilidad. A partir de estas probabilidades corregidas, se calcula la \acrshort{im} entre cada característica $X_j$ y el vector continuo $\hat{P}(y=1 \mid \mathbf{x})$. Las características se ordenan de mayor a menor valor de \acrshort{im}, obteniendo así el ranking final del método \acrshort{pumi}.
 
-  \item \textbf{Evaluación de rankings y clasificación.}
-  Para cada método y partición se calculan las métricas definidas en la Sección~\ref{sec:metricas}:
-  \begin{itemize}
-    \item \textbf{Correlación de Spearman $\rho$} entre el ranking del método y el ranking supervisado de referencia, evaluada tanto sobre el ranking completo como sobre las primeras $K$ posiciones.
-    \item \textbf{Solapamiento top-$K$}: número de características en común entre el top-$K$ del método y el top-$K$ del ranking supervisado.
-    \item \textbf{\acrshort{auc}-\acrshort{roc}}: se entrena una regresión logística sobre las $K$ características seleccionadas en $X_{\text{train}}$ y se evalúa sobre $X_{\text{test}}$~\cite{bradley1997use}.
-  \end{itemize}
+La ventaja principal de este enfoque es que no fuerza a considerar todo el conjunto no etiquetado como negativo. En su lugar, utiliza una señal probabilística continua que refleja la incertidumbre sobre la clase real de cada instancia. Esto resulta especialmente importante cuando $\alpha$ es bajo, ya que en ese caso existe una mayor proporción de positivos ocultos dentro de $\mathcal{U}$.
 
-  \item \textbf{Agregación de resultados.}
-  Las métricas de cada fold se promedian sobre las $K$ particiones de validación cruzada. Los resultados por combinación $(\alpha, \textit{semilla})$ se consolidan en un marco de datos tabulares y se calculan medias y desviaciones típicas sobre las semillas para cada valor de $\alpha$, obteniendo estimaciones estadísticamente robustas del comportamiento de cada método. Adicionalmente, se mide la \textit{inestabilidad del ranking} como la desviación típica promedio de la posición de cada característica a lo largo de las semillas:
-  \[
-    \text{Inestabilidad}
-    = \frac{1}{p}\sum_{j=1}^{p}
-      \mathrm{std}_{\textit{semilla}}\!\bigl[\mathrm{pos}(X_j)\bigr],
-  \]
-  donde $\mathrm{pos}(X_j)$ es la posición de la característica $j$ en el ranking y $p$ el número total de características del dataset.
+\section{Estimación de la frecuencia de etiquetado}
+\label{sec:estimacion_alpha}
 
-\end{enumerate}
+La frecuencia de etiquetado $\alpha$ representa la probabilidad de que un ejemplo positivo real sea observado como positivo etiquetado:
 
-% ── 3.1.3 Protocolo de validación cruzada ────────────────────────────────
-\subsection{Protocolo de validación cruzada}
-\label{sec:cv_protocol}
+\begin{equation}
+\alpha = P(s=1 \mid y=1).
+\label{eq:alpha_def}
+\end{equation}
 
-La evaluación se realiza mediante validación cruzada estratificada~\cite{kohavi1995study}, técnica que garantiza que la proporción de clases se mantiene aproximadamente constante en cada partición y produce estimaciones de rendimiento menos sesgadas que una partición aleatoria simple~\cite{hastie2009elements}. Esto es especialmente relevante en los datasets de este trabajo, donde la proporción de positivos varía entre el 33\,\% y el 65\,\% según el dataset (véase la Tabla~\ref{tab:datasets}).
+En este trabajo se estima a partir de las salidas del clasificador $g(\mathbf{x})$ sobre el conjunto de positivos etiquetados $\mathcal{P}$. Siguiendo la propuesta de Elkan y Noto~\cite{elkan2008learning}, se utiliza como estimador principal la media de las probabilidades predichas sobre dicho conjunto:
 
-Para los datasets generales y de \textit{benchmark} se utiliza \texttt{StratifiedKFold} con $K=3$ particiones. Para los datasets de microarray, donde el número de muestras es reducido ($n \leq 102$), se emplea \texttt{RepeatedStratifiedKFold} con $K=3$ particiones y 10 repeticiones independientes, lo que proporciona 30 evaluaciones por combinación $(\alpha, \textit{semilla})$ y produce estimaciones más estables de las métricas~\cite{kohavi1995study}.
+\begin{equation}
+\hat{\alpha} =
+\frac{1}{|\mathcal{P}|}
+\sum_{\mathbf{x}_i \in \mathcal{P}}
+g(\mathbf{x}_i).
+\label{eq:alpha_hat}
+\end{equation}
 
-Una restricción crítica del protocolo es la separación estricta entre selección de características y evaluación. El clasificador \acrshort{pu} y la estimación de $\hat{\alpha}$ se calculan una única vez sobre el conjunto completo antes de iniciar la validación cruzada; en cambio, los rankings de \acrshort{mi} se recalculan en cada partición exclusivamente sobre $X_{\text{train}}$, evitando cualquier filtración de información del conjunto de test hacia el proceso de selección. La evaluación del \acrshort{auc}-\acrshort{roc} se realiza siempre sobre $X_{\text{test}}$, sin ningún acceso a las etiquetas de test durante el proceso de selección de características~\cite{hastie2009elements}.
+Este estimador se basa en que las instancias de $\mathcal{P}$ son positivas reales. Si el clasificador probabilístico está razonablemente calibrado, las puntuaciones $g(\mathbf{x})$ sobre estos ejemplos deberían aproximar la constante de etiquetado $\alpha$. La estimación de este parámetro es relevante porque afecta directamente a la escala de las probabilidades corregidas utilizadas posteriormente por el método \acrshort{pumi}.
 
-% ── 3.1.4 Parámetros del experimento ─────────────────────────────────────
-\subsection{Parámetros del experimento}
-\label{sec:parametros_experimento}
+\section[Métodos de selección]{Métodos de selección de características comparados}
+\label{sec:metodos_comparados}
 
-La experimentación principal se estructura en torno al modo \textit{sweep} de $\alpha$: se evalúan cuatro valores de la frecuencia de etiquetado, $\alpha \in \{0.1, 0.2, 0.3, 0.5\}$, cruzados con tres semillas aleatorias $\{0, 1, 2\}$, produciendo 12 combinaciones por dataset. Este rango fue elegido para cubrir escenarios desde disponibilidad muy escasa de etiquetas ($\alpha=0.1$, donde solo el 10\,\% de los positivos son identificados) hasta disponibilidad moderada ($\alpha=0.5$), representando la mayoría de los contextos reales de \acrshort{pu} Learning~\cite{bekker2020learning}.
+Para evaluar el comportamiento del método propuesto, se compara frente a tres enfoques adicionales: selección supervisada con etiquetas reales, selección \textit{naive} y selección no supervisada por varianza.
 
-La Tabla~\ref{tab:parametros} resume los parámetros comunes a todos los experimentos.
+\subsection{Selección supervisada con etiquetas reales}
+\label{subsec:supervisado}
+
+El método supervisado utiliza las etiquetas reales $Y$ para calcular la \acrshort{im} entre cada característica y la clase. Representa el escenario ideal en el que se dispone de información completa sobre todas las instancias:
+
+\begin{equation}
+I(X_j;Y).
+\label{eq:mi_supervisada}
+\end{equation}
+
+Este método no sería aplicable en un escenario \acrshort{pu} real, ya que las etiquetas verdaderas de las instancias no etiquetadas son desconocidas. Sin embargo, en este trabajo se emplea como referencia para evaluar hasta qué punto los métodos \acrshort{pu} son capaces de aproximar el ranking que se obtendría con supervisión completa.
+
+\subsection{Método Naive}
+\label{subsec:naive}
+
+El método \textit{Naive} calcula la \acrshort{im} entre cada característica $X_j$ y la etiqueta observada $S$:
+
+\begin{equation}
+I(X_j;S).
+\label{eq:mi_naive}
+\end{equation}
+
+Este enfoque equivale a tratar todas las instancias no etiquetadas como si fueran negativas. Aunque es una estrategia sencilla y fácil de aplicar, introduce un sesgo importante, ya que el conjunto $\mathcal{U}$ contiene también positivos reales que no han sido etiquetados. Este problema se vuelve más acusado cuanto menor es el valor de $\alpha$, porque aumenta la proporción de positivos ocultos dentro del conjunto no etiquetado.
+
+\subsection{Método PU-MI}
+\label{subsec:pumi_comparado}
+
+El método \acrshort{pumi} calcula la \acrshort{im} entre cada característica y la probabilidad corregida de pertenencia a la clase positiva:
+
+\begin{equation}
+I\left(X_j;\hat{P}(y=1 \mid \mathbf{x})\right).
+\label{eq:mi_pumi}
+\end{equation}
+
+A diferencia del enfoque \textit{Naive}, este método no utiliza directamente la etiqueta observada $S$, sino una estimación continua de la clase real. Por ello, se espera que produzca rankings más próximos al método supervisado, especialmente en escenarios con baja frecuencia de etiquetado.
+
+\subsection{Selección por varianza}
+\label{subsec:varianza}
+
+Como referencia no supervisada, se incluye un método basado en la varianza de las características. Este método no utiliza ninguna información de clase, ni real ni observada, sino que ordena las variables según su dispersión:
+
+\begin{equation}
+\widehat{\mathrm{Var}}(X_j)
+=
+\frac{1}{n}
+\sum_{i=1}^{n}
+(x_{ij}-\bar{x}_j)^2.
+\label{eq:varianza}
+\end{equation}
+
+Una característica con varianza nula no aporta información discriminativa, pero una varianza elevada no implica necesariamente relevancia para la clasificación~\cite{guyon2003introduction}. Por este motivo, este método se utiliza como línea base sencilla para comprobar si los métodos basados en información de clase aportan una mejora real frente a un criterio puramente estadístico.
+
+\section{Métricas de evaluación y análisis}
+\label{sec:metricas}
+
+La evaluación se realiza desde dos perspectivas complementarias. Por un lado, se mide la calidad del ranking de características comparándolo con el ranking supervisado de referencia. Por otro lado, se analiza el efecto práctico de la selección de características sobre el rendimiento de un clasificador final.
+
+\subsection{Correlación de Spearman}
+\label{subsec:spearman}
+
+La correlación de Spearman mide la concordancia ordinal entre dos rankings~\cite{spearman1904proof}. En este trabajo se utiliza para comparar el orden de características producido por cada método con el ranking supervisado calculado a partir de las etiquetas reales. Para dos rankings de longitud $n$, se define como:
+
+\begin{equation}
+\rho =
+1 -
+\frac{6\sum_{i=1}^{n} d_i^2}
+{n(n^2-1)},
+\label{eq:spearman}
+\end{equation}
+
+donde $d_i$ es la diferencia entre las posiciones asignadas a la característica $i$ en ambos rankings. Valores próximos a 1 indican una alta similitud entre rankings, valores cercanos a 0 indican ausencia de relación ordinal clara y valores negativos reflejan ordenaciones opuestas.
+
+\subsection{Solapamiento top-$K$}
+\label{subsec:overlap}
+
+El solapamiento top-$K$ mide cuántas características coinciden entre las $K$ primeras posiciones del ranking de un método y las $K$ primeras posiciones del ranking supervisado:
+
+\begin{equation}
+\mathrm{Overlap@K}
+=
+\left|
+\mathrm{Top}_K(R_m)
+\cap
+\mathrm{Top}_K(R_{\mathrm{sup}})
+\right|.
+\label{eq:overlap}
+\end{equation}
+
+Esta métrica no tiene en cuenta el orden interno dentro del subconjunto seleccionado, sino únicamente si los métodos recuperan las mismas variables relevantes. Por ello, complementa a Spearman, que sí evalúa el orden relativo de las características.
+
+\subsection{AUC-ROC}
+\label{subsec:auc}
+
+Para evaluar el impacto de la selección de características sobre el rendimiento predictivo, se entrena un clasificador utilizando únicamente las variables seleccionadas por cada método. Su desempeño se mide mediante el área bajo la curva \acrshort{roc}, conocida como \acrshort{auc}-\acrshort{roc} (\textit{Area Under the Receiver Operating Characteristic Curve})~\cite{bradley1997use,fawcett2006introduction}.
+
+La curva \acrshort{roc} representa la relación entre la tasa de verdaderos positivos (\textit{True Positive Rate}, TPR) y la tasa de falsos positivos (\textit{False Positive Rate}, FPR) para distintos umbrales de decisión. De esta forma, permite analizar la capacidad del clasificador para distinguir entre ejemplos positivos y negativos sin depender de un único umbral~\cite{fawcett2006introduction}.
+
+El valor \acrshort{auc} corresponde al área situada bajo dicha curva y resume en un único valor la capacidad discriminativa global del modelo. Puede interpretarse como la probabilidad de que el clasificador asigne una puntuación mayor a una instancia positiva que a una negativa elegidas aleatoriamente~\cite{hanley1982meaning}.
+
+Los valores de \acrshort{auc} están comprendidos entre 0 y 1. Un valor cercano a 1 indica una excelente capacidad de discriminación entre clases, mientras que un valor próximo a 0.5 refleja un comportamiento equivalente al azar. Por este motivo, el \acrshort{auc}-\acrshort{roc} constituye una de las métricas más utilizadas para evaluar clasificadores binarios y comparar métodos de selección de características~\cite{bradley1997use,fawcett2006introduction}.
+
+En este trabajo, esta métrica se utiliza para determinar si las características seleccionadas permiten construir modelos predictivos competitivos y para comparar el rendimiento alcanzado por los distintos métodos de selección estudiados.
+
+\subsection{Medidas de complejidad de los conjuntos de datos}
+\label{subsec:complejidad}
+
+Además de las métricas utilizadas para evaluar la calidad de los rankings y el rendimiento de clasificación, se calculan varias medidas de complejidad sobre los conjuntos de datos originales. Estas medidas permiten caracterizar propiedades intrínsecas de los datos y analizar si existe alguna relación entre dichas propiedades y el comportamiento de los métodos de selección de características.
+
+En particular, se emplean las medidas F1, N1 y C1 propuestas en la literatura de caracterización de problemas de clasificación~\cite{ho2002complexity,lorena2019complex}.
+
+\paragraph{F1: Maximum Fisher's Discriminant Ratio.}
+
+La medida F1 evalúa la separabilidad de las clases a partir de las características individuales. Para cada variable se calcula la razón de Fisher entre las medias y varianzas de ambas clases, seleccionando posteriormente el valor máximo. Valores elevados indican la existencia de al menos una característica capaz de separar claramente ambas clases.
+
+\paragraph{N1: Fraction of Borderline Points.}
+
+La medida N1 cuantifica el grado de solapamiento entre clases. Para ello se construye el árbol de expansión mínima (\textit{Minimum Spanning Tree}, MST) del conjunto de datos y se calcula la proporción de aristas que conectan ejemplos pertenecientes a clases distintas. Valores próximos a cero indican clases bien separadas, mientras que valores elevados sugieren un mayor solapamiento y, por tanto, una mayor dificultad de clasificación.
+
+\paragraph{C1: Entropía de clases normalizada.}
+
+La medida C1 evalúa el equilibrio entre clases mediante la entropía de la distribución de etiquetas. Valores próximos a cero indican un fuerte desbalanceo entre clases, mientras que valores cercanos a uno corresponden a conjuntos equilibrados.
+
+Estas medidas se calculan utilizando las etiquetas reales de los datasets y se emplean posteriormente para interpretar las diferencias observadas entre métodos y conjuntos de datos.
+
+\subsection{Selección del número de características}
+\label{subsec:seleccion_k}
+
+Los métodos de selección de características evaluados generan un ranking ordenado de variables según su relevancia. Sin embargo, para construir un modelo predictivo es necesario determinar cuántas características del ranking se utilizarán finalmente. Con este objetivo, se analiza la evolución del rendimiento del clasificador a medida que aumenta el número de características seleccionadas.
+
+Para cada dataset y cada método, se entrena un clasificador utilizando únicamente las $K$ primeras características del ranking, considerando distintos valores de $K$. Posteriormente, se calcula el valor de \acrshort{auc} obtenido en cada caso. La representación gráfica de \acrshort{auc} frente a $K$ permite estudiar cómo evoluciona la capacidad predictiva del modelo conforme se incorporan nuevas variables.
+
+Este análisis resulta útil para identificar si la información discriminativa se concentra en un pequeño subconjunto de características o si, por el contrario, es necesario incorporar un mayor número de variables para alcanzar un rendimiento satisfactorio. Además, permite detectar situaciones en las que añadir más características apenas aporta mejoras o incluso puede perjudicar el rendimiento debido a la incorporación de ruido.
+
+En consecuencia, las curvas \acrshort{auc}$(K)$ constituyen una herramienta complementaria para interpretar la calidad de los rankings obtenidos y analizar el comportamiento de los distintos métodos de selección de características.
+
+\section{Protocolo experimental}
+\label{sec:protocolo_experimental}
+
+El protocolo experimental se aplica de forma independiente para cada dataset, valor de $\alpha$ y semilla aleatoria. En primer lugar, se genera el escenario \acrshort{pu}; después, se calculan los rankings de características mediante los métodos descritos anteriormente; finalmente, se evalúa el rendimiento de los subconjuntos seleccionados.
+
+Para evitar fugas de información, los rankings se calculan únicamente sobre el conjunto de entrenamiento de cada partición de validación cruzada. Posteriormente, las características seleccionadas se utilizan para entrenar un clasificador final, que se evalúa sobre el conjunto de test correspondiente. De esta forma, la información del test no interviene en el proceso de selección de características.
+
+La evaluación se realiza mediante validación cruzada estratificada, manteniendo la proporción de clases en cada partición. En los datasets con un número muy reducido de muestras, como los microarrays, se utiliza validación cruzada estratificada repetida para obtener estimaciones más estables. Los resultados finales se agregan calculando medias y desviaciones típicas sobre las distintas semillas y particiones.
+
+\chapter{Materiales}
+\section{Herramientas software}
+\label{sec:software}
+
+El desarrollo experimental se ha realizado en \textbf{Python 3.11}, utilizando bibliotecas especializadas para aprendizaje automático, cálculo numérico y gestión de experimentos.
+
+\begin{itemize}
+
+  \item \textbf{scikit-learn}~\cite{pedregosa2011sklearn}.  
+  Biblioteca de aprendizaje automático de propósito general. Se utiliza para entrenar el clasificador \acrshort{pu} (regresión logística), para la estimación de \acrshort{im} (\path{mutual_info_regression}), basada en el estimador \acrshort{knn} de Kraskov et~al.~\cite{kraskov2004estimating}), para la evaluación mediante \acrshort{auc}-\acrshort{roc} y para la generación del dataset sintético (\path{make_classification}).
+
+  \item \textbf{NumPy}~\cite{harris2020array}.  
+  Biblioteca de cálculo numérico sobre la que se apoyan todas las operaciones matriciales: cálculo de rankings, corrección de probabilidades, cómputo de métricas y manipulación de arrays de resultados.
+
+  \item \textbf{pandas}.  
+  Utilizado para la gestión y exportación de resultados tabulares (rankings de características, métricas por semilla y por valor de $\alpha$) en formato \acrshort{csv}.
+
+  \item \textbf{SciPy}~\cite{virtanen2020scipy}.  
+  Empleado para la carga de archivos \texttt{.mat} (datasets de microarray en formato MATLAB) y para el cálculo del coeficiente de correlación de Spearman (\texttt{scipy.\allowbreak stats.\allowbreak spearmanr}).
+
+  \item \textbf{MLflow}~\cite{zaharia2018mlflow}.  
+  Plataforma de seguimiento de experimentos. Se usa para registrar automáticamente hiperparámetros, métricas y artefactos (rankings en \acrshort{csv}) de cada ejecución, facilitando la trazabilidad y comparación entre configuraciones experimentales.
+
+\end{itemize}
+
+
+\section{Conjuntos de datos}
+\label{sec:datasets}
+
+Con el objetivo de evaluar el comportamiento de los métodos de selección de características estudiados, se han seleccionado varios conjuntos de datos con diferentes tamaños muestrales, niveles de dimensionalidad y dominios de aplicación. La colección incluye tanto \textit{benchmarks} clásicos de selección de características como problemas reales de clasificación binaria, permitiendo analizar el rendimiento de los métodos en escenarios con características muy diversas.
+
+Los datasets considerados abarcan desde problemas de dimensionalidad moderada hasta escenarios de muy alta dimensión, donde el número de características supera ampliamente al número de muestras o donde existe una elevada proporción de variables irrelevantes. Estas características los convierten en entornos adecuados para evaluar la capacidad de los distintos métodos para identificar variables informativas y construir modelos predictivos competitivos.
+
+La Tabla~\ref{tab:datasets} resume las principales características de los conjuntos de datos utilizados, incluyendo el número de muestras ($n$), el número de características ($p$), el porcentaje de ejemplos positivos y su procedencia.
+
+\subsection{Benchmarks de selección de características}
+\label{subsec:benchmarks}
+
+Los \textit{benchmarks} incluidos en este trabajo han sido ampliamente utilizados en la literatura de selección de características. Estos conjuntos suelen contener un número reducido de variables relevantes inmersas en un gran volumen de ruido, lo que los convierte en escenarios adecuados para evaluar la capacidad de recuperación de características informativas.
+
+\paragraph{Waveform-5000.}
+Dataset sintético derivado del trabajo de Breiman et al.~\cite{breiman1984cart}. Contiene 5\,000 muestras y 40 características. El problema original multiclase se transforma en un problema binario para adaptarlo al contexto experimental de este trabajo, tomando la clase~0 como positiva frente al resto de clases.
+
+\paragraph{Corral100.}
+Dataset sintético perteneciente a la colección de OpenML. Consta de 100\,000 muestras y 100 características. Su gran tamaño permite analizar el comportamiento de los métodos de selección en escenarios con un elevado volumen de datos.
+
+\paragraph{Gisette.}
+Dataset creado para el \textit{NIPS 2003 Feature Selection Challenge}~\cite{guyon2004result}. El objetivo consiste en distinguir imágenes correspondientes a los dígitos 4 y 9. Contiene aproximadamente 7\,000 muestras y 5\,000 características, muchas de ellas irrelevantes o redundantes, constituyendo un benchmark clásico de alta dimensionalidad.
+
+\paragraph{Dexter.}
+También perteneciente al \textit{NIPS 2003 Feature Selection Challenge}~\cite{guyon2004result}. Se trata de un problema de clasificación de documentos de texto representados mediante una bolsa de palabras. Contiene alrededor de 600 muestras y 20\,000 características, presentando un escenario extremadamente disperso y de muy alta dimensión.
+
+\paragraph{Dorothea.}
+Otro de los datasets del \textit{NIPS 2003 Feature Selection Challenge}~\cite{guyon2004result}. El objetivo es predecir la actividad biológica de compuestos químicos. Dispone de 1\,950 muestras y 100\,000 características binarias, siendo uno de los benchmarks más exigentes en términos de dimensionalidad.
+
+\subsection{Datasets reales de clasificación}
+\label{subsec:reales}
+
+Además de los benchmarks clásicos, se incluyen varios conjuntos de datos reales procedentes de distintos dominios de aplicación. Estos datasets permiten evaluar si las conclusiones observadas en los benchmarks se mantienen en problemas más cercanos a escenarios prácticos.
+
+\paragraph{Musk Version 2.}
+Dataset de clasificación molecular procedente del repositorio \acrshort{uci}~\cite{lichman2013uci}. El objetivo consiste en distinguir moléculas con olor a almizcle (\textit{musk}) de moléculas sin esta propiedad. Contiene 6\,598 muestras y 166 características continuas.
+
+\paragraph{Jasmine.}
+Dataset de clasificación binaria disponible en OpenML. Contiene aproximadamente 3\,000 muestras y 144 características. Presenta una distribución equilibrada entre clases y una dimensionalidad moderada.
+
+\paragraph{KDDCup99.}
+Dataset clásico de detección de intrusiones utilizado en la competición KDD Cup 1999~\cite{kddcup99}. El problema consiste en identificar conexiones de red normales frente a conexiones asociadas a distintos tipos de ataques. En este trabajo se utiliza una versión preprocesada con aproximadamente 494,000 muestras: las etiquetas originales, que distinguen entre conexiones normales y múltiples tipos de ataque, se binarizan tomando cualquier tipo de ataque como clase positiva y la conexión normal como negativa. Adicionalmente, las tres características categóricas (tipo de protocolo, servicio y tipo de \textit{flag}) se codifican mediante \textit{one-hot encoding}, expandiendo las 41 características originales hasta aproximadamente 118.
 
 \begin{table}[ht]
 \centering
-\caption{Parámetros comunes de la experimentación}
-\label{tab:parametros}
+\caption{Conjuntos de datos utilizados.}
+\label{tab:datasets}
 \small
-\begin{tabular}{lll}
+
+\resizebox{\textwidth}{!}{
+\begin{tabular}{lrrrrll}
 \toprule
-\textbf{Parámetro} & \textbf{Valor} & \textbf{Descripción} \\
+\textbf{Dataset} & $n$ & $p$ & \%pos & \textbf{Tipo} & \textbf{Fuente} \\
 \midrule
-$K$                           & 25                        & Características top-$K$ seleccionadas y evaluadas \\
-$K_{\text{folds}}$            & 3                         & Particiones en \acrshort{cv} estratificado \\
-Repeticiones (microarray)     & 10                        & Repeticiones de \acrshort{cv} para microarray \\
-Semillas                      & \{0, 1, 2\}               & Semillas aleatorias del sweep de $\alpha$ \\
-$\alpha$ evaluados            & \{0.1, 0.2, 0.3, 0.5\}   & Valores de frecuencia de etiquetado \\
-Ruido gaussiano               & 0                         & Sin ruido adicional sobre las características \\
-Estimador $\hat{\alpha}$      & media                     & Estimador por defecto \\
+Waveform-5000 & 5\,000 & 40 & 33.3 & Benchmark & OpenML \\
+Corral100 & 100\,000 & 100 & 50.0 & Benchmark & OpenML \\
+Gisette & 7\,000 & 5\,000 & 50.0 & Benchmark & UCI NIPS 2003 \\
+Dexter & 600 & 20\,000 & 50.0 & Benchmark & UCI NIPS 2003 \\
+Dorothea & 1\,950 & 100\,000 & 50.0 & Benchmark & UCI NIPS 2003 \\
 \midrule
-Clasificador \acrshort{pu}    & \acrshort{lr} ($L_2$, lbfgs) & Estima $P(s=1 \mid \mathbf{x})$ \\
-Estimador \acrshort{mi}       & \acrshort{knn} ($k=3$)    & Estimador de Kraskov et~al.~\cite{kraskov2004estimating} \\
-Clasificador de evaluación    & \acrshort{lr} ($L_2$)     & Evalúa \acrshort{auc}-\acrshort{roc} sobre top-$K$ \\
+Musk v2 & 6\,598 & 166 & 15.4 & Real & UCI \\
+Jasmine & 2\,986 & 144 & 50.0 & Real & OpenML \\
+KDDCup99 & 494\,021 & 118 & 20.0 & Real & UCI KDD Cup 1999 \\
+\bottomrule
+\end{tabular}
+}
+\end{table}
+
+\chapter{Experimentación y resultados}
+\label{chap:experimentacion_resultados}
+
+\lettrine{E}{ste} capítulo presenta los resultados experimentales obtenidos al aplicar los métodos de selección de características descritos en el capítulo anterior sobre los ocho conjuntos de datos descritos en la Sección~\ref{sec:conjuntos de datos}. La evaluación cubre un amplio abanico de tamaños muestrales, dimensionalidades y dominios, desde problemas sintéticos de dimensionalidad moderada (Waveform-5000) hasta benchmarks de muy alta dimensión procedentes del \textit{NIPS 2003 Feature Selection Challenge}~\cite{guyon2004result} (Gisette, Dexter, Dorothea).
+
+Los experimentos se han ejecutado barriendo los valores de frecuencia de etiquetado $\alpha\in\{0.10,0.20,0.30,0.50\}$ en todos los conjuntos de datos considerados. Para cada configuración se realizaron tres semillas aleatorias independientes y una validación cruzada estratificada de tres particiones, siguiendo el protocolo experimental descrito en el capítulo anterior. Los resultados presentados en este capítulo corresponden a la media obtenida sobre todas las ejecuciones, reportándose además la desviación típica cuando resulta relevante para evaluar la variabilidad observada.
+
+El capítulo se organiza de la siguiente forma. La Sección~\ref{sec:estudio_preliminar} presenta un estudio preliminar sobre el conjunto de datos Waveform-5000, que sirve de ejemplo ilustrativo del comportamiento de los métodos. La Sección~\ref{sec:eval_alpha} evalúa la calidad de la estimación de $\alpha$ en todos los conjuntos de datoss, identificando dos patrones de comportamiento diferenciados. Las Secciones~\ref{sec:comparacion_rankings} y~\ref{sec:eval_clasificacion} analizan la calidad de los rankings y el rendimiento de clasificación, respectivamente. La Sección~\ref{sec:relacion_spearman_auc} examina cuándo una mejora del ranking se traduce en una mejora de clasificación, la Sección~\ref{sec:influencia_alpha} estudia hasta qué punto la precisión de $\hat\alpha$ determina el rendimiento de \acrshort{pumi}, y finalmente la Sección~\ref{sec:complejidad_rendimiento} sintetiza la relación entre las medidas de complejidad de los conjuntos de datoss y el comportamiento observado.
+
+% ============================================================
+\section{Estudio preliminar}
+\label{sec:estudio_preliminar}
+% ============================================================
+
+Para ilustrar el comportamiento general de los métodos evaluados, se analiza en detalle el conjunto de datos Waveform-5000 bajo distintos valores de frecuencia de etiquetado $\alpha \in \{0.10,0.20,0.30,0.50\}$. Se ha elegido este conjunto de datos como ejemplo introductorio porque presenta una dimensionalidad moderada ($n=5000$, $p=40$), permite visualizar con claridad las diferencias entre métodos y muestra un comportamiento representativo de las tendencias observadas posteriormente en otros conjuntos de datos.
+
+La Figura~\ref{fig:waveform_spearman} muestra la evolución de la correlación de Spearman con el ranking supervisado de referencia en función de $\alpha$. Los resultados corresponden a la media obtenida sobre tres semillas y tres particiones de validación cruzada, representándose además la desviación típica asociada.
+
+\acrshort{pumi} obtiene una correlación superior al enfoque \textit{Naive} para $\alpha=0.10$, $\alpha=0.20$ y $\alpha=0.30$. La diferencia es especialmente visible para valores bajos de $\alpha$, donde el enfoque \textit{Naive} se ve más afectado por la presencia de positivos ocultos en el conjunto no etiquetado. A medida que $\alpha$ aumenta, ambos métodos tienden a converger, alcanzando valores prácticamente idénticos para $\alpha=0.50$.
+
+Por su parte, el método basado en varianza mantiene una correlación moderada pero claramente inferior a la obtenida por \acrshort{pumi}, lo que indica que la dispersión marginal de las variables contiene cierta información útil, aunque insuficiente para recuperar un ranking próximo al supervisado.
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.80\textwidth]{resultados/waveform/spearman_vs_alpha.png}
+\caption{Correlación de Spearman para Waveform-5000.}
+\label{fig:waveform_spearman}
+\end{figure}
+
+En lo que respecta a la evaluación mediante clasificación, la Figura~\ref{fig:waveform_auc} muestra la evolución del \acrshort{auc}-\acrshort{roc} en función de $\alpha$. Los resultados corresponden a la media obtenida sobre tres semillas y tres particiones de validación cruzada, representándose además la desviación típica asociada.
+
+Las diferencias observadas entre métodos son menores que las apreciadas mediante la correlación de Spearman. El método \acrshort{pumi} alcanza valores de \acrshort{auc} prácticamente indistinguibles de los obtenidos con el ranking supervisado de referencia, situándose alrededor de 0.924 para todos los valores de $\alpha$. Por el contrario, el enfoque \textit{Naive} presenta un rendimiento inferior, especialmente para valores bajos de $\alpha$, aunque la diferencia se reduce progresivamente a medida que aumenta la frecuencia de etiquetado.
+
+El clasificador entrenado sin realizar selección de características obtiene el mejor resultado global, con un \acrshort{auc} cercano a 0.927. Esto indica que, en este conjunto de datos, la selección de características permite aproximarse al rendimiento máximo utilizando únicamente una fracción reducida de las variables disponibles.
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.80\textwidth]{resultados/waveform/auc_vs_alpha_ranking.png}
+\caption{\acrshort{auc}-\acrshort{roc} en el conjunto de datos Waveform-5000.}
+\label{fig:waveform_auc}
+\end{figure}
+
+La Figura~\ref{fig:waveform_auc_k} muestra la evolución del \acrshort{auc}-\acrshort{roc} al incrementar el número de características seleccionadas a partir del ranking supervisado de referencia. Se observa un aumento progresivo del rendimiento al incorporar las primeras variables más relevantes, pasando de un \acrshort{auc} de 0.861 con una única característica a 0.913 con las cinco primeras.
+
+A partir de \(K=10\), la curva comienza a estabilizarse, alcanzando un \acrshort{auc} de 0.933. Este comportamiento indica que la mayor parte de la información discriminativa del conjunto de datos se encuentra concentrada en un número reducido de características, mientras que la incorporación de variables adicionales aporta mejoras marginales.
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.80\textwidth]{resultados/waveform/auc_k_real.png}
+\caption{Curva \acrshort{auc}$(K)$ para el conjunto de datos Waveform-5000.}
+\label{fig:waveform_auc_k}
+\end{figure}
+
+Los resultados obtenidos en Waveform-5000 muestran que \acrshort{pumi} es capaz de recuperar rankings de características más próximos al ranking supervisado de referencia que el enfoque \textit{Naive}, especialmente cuando la frecuencia de etiquetado es reducida. Esta mejora también se refleja en el rendimiento de clasificación, donde \acrshort{pumi} alcanza valores de \acrshort{auc} muy próximos a los obtenidos utilizando las etiquetas reales.
+
+La curva \acrshort{auc}$(K)$ muestra además que, en este conjunto de datos, es posible alcanzar un rendimiento próximo al máximo utilizando únicamente una parte de las características disponibles. No obstante, dado que Waveform-5000 presenta una dimensionalidad moderada y un comportamiento relativamente estable, resulta necesario extender el análisis a conjuntos de datos de distinta naturaleza y complejidad para determinar si las tendencias observadas se mantienen de forma consistente.
+
+En conjunto, este estudio preliminar permite ilustrar el comportamiento de las métricas utilizadas en el trabajo y proporciona un punto de partida para el análisis comparativo que se desarrolla en las siguientes secciones.
+
+% ============================================================
+\section[Evaluación de la estimación de \texorpdfstring{$\alpha$}{alpha}]{Evaluación de la estimación de $\alpha$}
+\label{sec:eval_alpha}
+% ============================================================
+
+La estimación del parámetro $\alpha$ constituye un paso fundamental del método \acrshort{pumi}, ya que determina la corrección aplicada a las probabilidades obtenidas por el clasificador. La Tabla~\ref{tab:alpha_estimation} resume los valores estimados $\hat{\alpha}$ para los distintos conjuntos de datos y para los cuatro valores de frecuencia de etiquetado considerados ($\alpha\in\{0.10,0.20,0.30,0.50\}$).
+
+Los resultados permiten distinguir tres comportamientos claramente diferenciados: una estimación razonablemente precisa, una saturación del estimador y un comportamiento intermedio representado por el dataset Madelon.
+
+\begin{table}[ht]
+\centering
+\caption{Estimaciones de $\hat{\alpha}$ para los distintos conjuntos de datos.}
+\label{tab:alpha_estimation}
+\small
+\resizebox{\textwidth}{!}{
+\begin{tabular}{lcccc}
+\toprule
+\textbf{Dataset} & $\alpha=0.10$ & $\alpha=0.20$ & $\alpha=0.30$ & $\alpha=0.50$ \\
+\midrule
+Waveform-5000 & 0.0803 & 0.1527 & 0.2264 & 0.3600 \\
+Corral100     & ---    & ---    & ---    & ---    \\
+Jasmine       & 0.1440 & 0.2013 & 0.2637 & 0.3996 \\
+Musk v2       & 0.1159 & 0.1982 & 0.2455 & 0.3786 \\
+KDDCup99      & 0.0996 & 0.1991 & 0.2986 & 0.4979 \\
+\midrule
+Madelon       & 0.6986 & 0.3803 & 0.3724 & 0.4352 \\
+\midrule
+Gisette       & 0.9905 & 0.9909 & 0.9918 & 0.9926 \\
+Dexter        & 0.9988 & 0.9990 & 0.9988 & 0.9991 \\
+Dorothea      & 0.9996 & 0.9997 & 0.9998 & 0.9997 \\
+\bottomrule
+\end{tabular}
+}
+\end{table}
+
+\subsection{Estimación razonablemente precisa}
+\label{subsec:alpha_correcto}
+
+Waveform-5000, Jasmine, Musk~v2 y KDDCup99 presentan una evolución de $\hat{\alpha}$ coherente con el valor real de $\alpha$. En estos conjuntos de datos, el estimador es capaz de seguir la tendencia esperada: valores mayores de $\alpha$ producen estimaciones mayores de $\hat{\alpha}$.
+
+KDDCup99 destaca por la elevada precisión de las estimaciones obtenidas, prácticamente coincidentes con los valores reales para todos los niveles de etiquetado considerados. Jasmine y Musk~v2 muestran una ligera sobreestimación para valores bajos de $\alpha$, mientras que Waveform-5000 presenta una subestimación sistemática en todo el rango analizado. A pesar de estas desviaciones, los cuatro conjuntos conservan una relación aproximadamente monótona entre $\alpha$ y $\hat{\alpha}$, lo que indica que la corrección probabilística sigue disponiendo de una estimación informativa de la frecuencia de etiquetado.
+
+\subsection{Comportamiento anómalo}
+\label{subsec:alpha_madelon}
+
+Madelon presenta un comportamiento diferente al observado en el resto de conjuntos de datos. Aunque el estimador no se satura en valores próximos a uno, tampoco reproduce adecuadamente la evolución de $\alpha$. Las estimaciones obtenidas permanecen relativamente alejadas de los valores reales y muestran una variación poco consistente al aumentar la frecuencia de etiquetado.
+
+Este comportamiento sugiere que el clasificador utilizado para estimar $g(\mathbf{x})=P(s=1\mid \mathbf{x})$ encuentra dificultades para modelar adecuadamente la estructura del problema. Como consecuencia, las probabilidades obtenidas sobre los positivos etiquetados dejan de constituir una aproximación fiable de la frecuencia de etiquetado real.
+
+\subsection{Saturación del estimador}
+\label{subsec:saturacion}
+
+Gisette, Dexter y Dorothea exhiben un comportamiento radicalmente distinto al observado en el resto de conjuntos de datos. En los tres casos, la estimación $\hat{\alpha}$ permanece prácticamente constante y muy próxima a uno independientemente del valor real de $\alpha$. Por ejemplo, en Dorothea se obtienen valores comprendidos entre 0.9996 y 0.9998 para todos los niveles de etiquetado evaluados, mientras que en Dexter y Gisette se observa un comportamiento análogo.
+
+Este fenómeno puede explicarse por las características propias de estos conjuntos de datos. Los tres proceden del \textit{NIPS 2003 Feature Selection Challenge} y presentan una dimensionalidad extremadamente elevada en relación con el número de muestras disponibles. En particular, Dexter contiene aproximadamente 20\,000 características para 600 ejemplos de entrenamiento, mientras que Dorothea alcanza las 100\,000 características para menos de 1\,000 muestras~\cite{guyon2004result}. En este tipo de escenarios, la relación entre número de variables y número de ejemplos favorece que los clasificadores lineales encuentren fronteras de separación casi perfectas entre los ejemplos positivos etiquetados y el conjunto no etiquetado.
+
+Como consecuencia, el clasificador utilizado para estimar
+
+\[
+g(\mathbf{x}) = P(s=1 \mid \mathbf{x})
+\]
+
+asigna probabilidades muy próximas a uno a la mayoría de los ejemplos pertenecientes al conjunto de positivos etiquetados $\mathcal{P}$. Dado que el estimador de Elkan y Noto calcula
+
+\[
+\hat{\alpha}
+=
+\frac{1}{|\mathcal{P}|}
+\sum_{\mathbf{x}\in\mathcal{P}}
+g(\mathbf{x}),
+\]
+
+la media de estas probabilidades también converge hacia uno, independientemente del valor real de $\alpha$. En otras palabras, el clasificador deja de reflejar la frecuencia de etiquetado y pasa a reflejar únicamente la facilidad con la que distingue los positivos etiquetados del resto de muestras.
+
+Este comportamiento puede interpretarse como una pérdida de calibración del clasificador. Aunque las probabilidades obtenidas siguen permitiendo ordenar correctamente muchas instancias, dejan de representar valores probabilísticos coherentes con la frecuencia real de etiquetado. Como resultado, la estimación de $\hat{\alpha}$ pierde su significado como aproximación de $P(s=1\mid y=1)$ y la corrección probabilística aplicada por \acrshort{pumi} deja de modificar sustancialmente las puntuaciones originales.
+
+No obstante, una estimación incorrecta de $\hat{\alpha}$ no implica necesariamente un deterioro equivalente en la calidad de los rankings obtenidos. El cálculo de la información mutua depende principalmente de la capacidad del clasificador para preservar el orden relativo entre las muestras y no tanto de la calibración absoluta de las probabilidades. Por este motivo, como se mostrará en las secciones posteriores, algunos de estos conjuntos de datos siguen obteniendo valores competitivos de Spearman y \acrshort{auc} a pesar de presentar una estimación de $\alpha$ prácticamente saturada.
+
+% ============================================================
+\section{Comparación de rankings}
+\label{sec:comparacion_rankings}
+% ============================================================
+
+La calidad de los rankings generados por cada método se evalúa mediante la correlación de Spearman respecto al ranking supervisado obtenido utilizando las etiquetas reales. Valores próximos a 1 indican una elevada concordancia entre ambos rankings, mientras que valores cercanos a 0 reflejan ausencia de relación monotónica entre ellos. En este último caso, las características consideradas relevantes por el método no coinciden sistemáticamente con las seleccionadas en el escenario supervisado, produciendo un ordenamiento esencialmente aleatorio desde el punto de vista de la recuperación de variables relevantes. Por el contrario, valores negativos indican correlación inversa entre ambos rankings.
+
+La Tabla~\ref{tab:spearman_summary} resume los resultados obtenidos para los distintos conjuntos de datos considerando dos niveles de frecuencia de etiquetado: $\alpha=0.1$ y $\alpha=0.3$. El primer valor representa un escenario con una elevada proporción de positivos ocultos, mientras que el segundo permite analizar el comportamiento de los métodos cuando la frecuencia de etiquetado es moderada. El símbolo ``---'' indica que la correlación no pudo calcularse debido a la ausencia de variabilidad suficiente en alguno de los rankings comparados.
+
+\begin{table}[ht]
+\centering
+\caption{Correlación de Spearman.}
+\label{tab:spearman_summary}
+\small
+\resizebox{\textwidth}{!}{
+\begin{tabular}{lrrrrrr}
+\toprule
+\multirow{2}{*}{\textbf{Conjunto de datos}} & \multicolumn{3}{c}{$\alpha = 0.1$} & \multicolumn{3}{c}{$\alpha = 0.3$} \\
+\cmidrule(lr){2-4}\cmidrule(lr){5-7}
+& \textbf{\acrshort{pumi}} & \textbf{Naive} & \textbf{Varianza} & \textbf{\acrshort{pumi}} & \textbf{Naive} & \textbf{Varianza} \\
+\midrule
+Waveform-5000      & $\mathbf{0.885}$ & $0.723$ & $-0.567$ & $\mathbf{0.819}$ & $0.746$ & $-0.567$ \\
+Corral100          & $0.000$ & $\mathbf{0.644}$ & {---} & $0.200$ & $\mathbf{0.978}$ & {---} \\
+Jasmine            & $\mathbf{0.894}$ & $0.291$ & $0.496$ & $\mathbf{0.902}$ & $0.679$ & $0.496$ \\
+Musk v2            & $\mathbf{0.465}$ & $0.235$ & {---} & $0.470$ & $\mathbf{0.663}$ & {---} \\
+KDDCup99           & $0.519$ & $\mathbf{0.722}$ & $-0.200$ & $\mathbf{0.419}$ & $0.300$ & $-0.200$ \\
+\midrule
+Gisette  & $\mathbf{0.610}$ & $0.384$ & $0.348$ & $\mathbf{0.903}$ & $0.747$ & $0.348$ \\
+Dexter   & $0.833$ & {---}   & $0.498$ & $0.594$ & {---}   & $0.498$ \\
+Dorothea & $0.051$ & $-0.288$ & {---}   & $\mathbf{0.536}$ & $0.369$ & {---} \\
+\bottomrule
+\end{tabular}
+}
+\end{table}
+
+\subsection{Conjuntos de datos sin saturación}
+\label{subsec:rankings_no_saturados}
+
+Entre los cinco conjuntos de datos con estimación correcta de $\alpha$, \acrshort{pumi} supera al \textit{Naive} en la mayoría de los casos. La ventaja es especialmente pronunciada a bajo $\alpha$: en Jasmine con $\alpha=0.1$, \acrshort{pumi} alcanza $\rho=0.894$ mientras que el \textit{Naive} obtiene únicamente $\rho=0.291$; en Waveform-5000, $\rho=0.885$ frente a $\rho=0.723$; y en Musk~v2, $\rho=0.465$ frente a $\rho=0.235$. Estos resultados son coherentes con la teoría: cuando $\alpha$ es bajo, la proporción de positivos ocultos en $\mathcal{U}$ es elevada, el sesgo del enfoque \textit{Naive} es máximo, y la corrección probabilística de \acrshort{pumi} permite recuperar una señal de clase más fiel. A medida que $\alpha$ aumenta, el sesgo del \textit{Naive} disminuye y los rankings convergen.
+
+Corral100 constituye una excepción clara dentro de los conjuntos sin saturación. El enfoque \textit{Naive} obtiene correlaciones de Spearman superiores a las de \acrshort{pumi} para todos los valores de $\alpha$ evaluados. Este resultado puede explicarse por la propia naturaleza del problema. Corral100 es un conjunto de datos sintético con únicamente cinco características relevantes entre cien variables y una estructura de clases altamente regular. Como consecuencia, incluso el enfoque \textit{Naive} es capaz de recuperar gran parte de la información discriminativa sin necesidad de aplicar una corrección probabilística. En este contexto, pequeñas modificaciones introducidas por la corrección probabilística pueden alterar el orden de algunas características sin aportar una ventaja real sobre una señal que ya resulta suficientemente informativa.
+
+KDDCup99 presenta un comportamiento similar. A pesar de que la estimación de $\alpha$ es prácticamente exacta para todos los valores evaluados, \acrshort{pumi} no supera sistemáticamente al enfoque \textit{Naive}. Este resultado indica que una estimación precisa de $\alpha$ no garantiza necesariamente una mejora en la recuperación de características relevantes.
+
+La explicación más probable se encuentra en la elevada separabilidad del problema. KDDCup99 es un conjunto de datos donde las clases pueden distinguirse con gran facilidad, lo que se refleja en los elevados valores de \acrshort{auc} obtenidos por todos los métodos. En estas condiciones, la señal utilizada por el enfoque \textit{Naive} ya contiene suficiente información para identificar correctamente las características más relevantes, reduciendo el margen de mejora que puede aportar la corrección probabilística.
+
+La Figura~\ref{fig:spearman_panel_main} muestra las curvas de Spearman en función de $\alpha$ para cuatro conjuntos de datos representativos del grupo sin saturación.
+
+\begin{figure}[ht]
+\centering
+\includegraphics[width=0.48\textwidth]{resultados/waveform/spearman_vs_alpha.png}
+\hfill
+\includegraphics[width=0.48\textwidth]{resultados/jasmine/spearman_vs_alpha.png}
+\\[6pt]
+\includegraphics[width=0.48\textwidth]{resultados/kddcup99/spearman_vs_alpha.png}
+\hfill
+\includegraphics[width=0.48\textwidth]{resultados/musk_v2/spearman_vs_alpha.png}
+\caption{Correlación de Spearman.}
+\label{fig:spearman_panel_main}
+\end{figure}
+
+
+\subsection{Conjuntos de datos con saturación}
+\label{subsec:rankings_saturados}
+
+Los conjuntos de datos Gisette, Dexter y Dorothea presentan el fenómeno de saturación descrito en la Sección~\ref{subsec:saturacion}, donde la estimación de la frecuencia de etiquetado converge a valores próximos a uno independientemente del valor real de $\alpha$. A priori, cabría esperar que esta pérdida de calibración afectase negativamente a la calidad de los rankings obtenidos por \acrshort{pumi}. Sin embargo, los resultados muestran un comportamiento más complejo.
+
+Gisette constituye el caso más favorable dentro de este grupo. A pesar de que $\hat{\alpha}\approx0.99$ para todos los valores evaluados, \acrshort{pumi} obtiene correlaciones de Spearman consistentemente superiores a las del enfoque \textit{Naive}. La diferencia es especialmente visible para $\alpha=0.3$, donde \acrshort{pumi} alcanza $\rho=0.903$ frente a $\rho=0.747$ del método \textit{Naive}. Este resultado indica que una estimación incorrecta de $\alpha$ no implica necesariamente una pérdida de calidad en el ranking. Aunque la corrección probabilística deja de estar bien calibrada, el clasificador sigue siendo capaz de ordenar las muestras de forma útil para identificar características relevantes.
+
+En Dexter y Dorothea se observa un comportamiento más irregular. En Dexter, \acrshort{pumi} alcanza valores de Spearman moderadamente elevados ($\rho=0.833$ para $\alpha=0.1$ y $\rho=0.594$ para $\alpha=0.3$), mientras que en Dorothea la correlación pasa de $\rho=0.051$ a $\rho=0.536$ al aumentar $\alpha$. En ambos casos, la saturación del estimador no impide completamente la recuperación de información relevante, aunque la calidad de los rankings resulta claramente inferior a la observada en Gisette.
+
+Estos resultados sugieren que la calidad de la estimación de $\alpha$ y la calidad del ranking de características no están necesariamente ligadas de forma directa. Mientras que la estimación de $\alpha$ afecta principalmente a la calibración absoluta de las probabilidades, la recuperación de características relevantes depende en mayor medida de la capacidad del clasificador para preservar el orden relativo entre las muestras. Como consecuencia, incluso cuando $\hat{\alpha}$ está claramente saturado, el método puede seguir generando rankings competitivos si las puntuaciones producidas por el clasificador conservan suficiente capacidad discriminativa.
+
+La Figura~\ref{fig:spearman_panel_sat} muestra la evolución de la correlación de Spearman para los conjuntos de datos afectados por saturación.
+
+\begin{figure}[ht]
+\centering
+\includegraphics[width=0.48\textwidth]{resultados/gisette_extenso/spearman_vs_alpha.png}
+\hfill
+\includegraphics[width=0.48\textwidth]{resultados/dorothea/spearman_vs_alpha.png}
+\\[6pt]
+\includegraphics[width=0.48\textwidth]{resultados/dexter/spearman_vs_alpha.png}
+\hfill
+\includegraphics[width=0.48\textwidth]{resultados/madelon_extenso/spearman_vs_alpha.png}
+\caption{Correlación de Spearman.}
+\label{fig:spearman_panel_sat}
+\end{figure}
+
+% ============================================================
+\section{Evaluación mediante clasificación}
+\label{sec:eval_clasificacion}
+% ============================================================
+
+Además de la calidad del ranking, se evalúa el impacto de la selección de características sobre el rendimiento de un clasificador \acrshort{lr} entrenado con las $K$ variables más relevantes según cada método. La Tabla~\ref{tab:auc_summary} resume los resultados obtenidos para $\alpha=0.1$ y $\alpha=0.3$. Además de \acrshort{pumi}, el enfoque \textit{Naive} y el método basado en varianza, se incluye el ranking supervisado calculado a partir de las etiquetas reales como referencia del mejor comportamiento esperable bajo las mismas condiciones experimentales. En cada fila se resalta en negrita el mejor resultado entre \acrshort{pumi} y el enfoque \textit{Naive}, ya que ambos constituyen los métodos objeto principal de comparación en este trabajo.
+
+\begin{table}[ht]
+\centering
+\caption{Resultados de \acrshort{auc}-\acrshort{roc} para los distintos métodos de selección de características.}
+\label{tab:auc_summary}
+\small
+\resizebox{\textwidth}{!}{
+\begin{tabular}{lrrrrrrrr}
+\toprule
+\multirow{2}{*}{\textbf{Conjunto de datos}} & \multicolumn{4}{c}{$\alpha = 0.1$} & \multicolumn{4}{c}{$\alpha = 0.3$} \\
+\cmidrule(lr){2-5}\cmidrule(lr){6-9}
+ & \textbf{\acrshort{pumi}} & \textbf{Naive} & \textbf{Real} & \textbf{Var.} & \textbf{\acrshort{pumi}} & \textbf{Naive} & \textbf{Real} & \textbf{Var.} \\
+\midrule
+Waveform-5000 & $\mathbf{0.923}$ & 0.910 & 0.924 & 0.898 & $\mathbf{0.924}$ & 0.920 & 0.924 & 0.898 \\
+Corral100     & $\mathbf{0.993}$ & 0.993 & 0.993 & 0.993 & $\mathbf{0.993}$ & 0.993 & 0.993 & 0.993 \\
+Jasmine       & $\mathbf{0.842}$ & 0.836 & 0.843 & 0.827 & $\mathbf{0.841}$ & 0.839 & 0.843 & 0.827 \\
+Musk v2       & $\mathbf{0.911}$ & 0.899 & 0.903 & 0.855 & $\mathbf{0.912}$ & 0.904 & 0.903 & 0.855 \\
+KDDCup99      & $\mathbf{0.996}$ & 0.994 & 0.997 & 0.996 & 0.996 & $\mathbf{0.997}$ & 0.997 & 0.996 \\
+\midrule
+Gisette$^\dagger$   & $\mathbf{0.978}$ & 0.977 & 0.978 & 0.974 & 0.977 & $\mathbf{0.979}$ & 0.978 & 0.974 \\
+Dexter$^\dagger$    & $\mathbf{0.787}$ & 0.633 & 0.915 & 0.911 & $\mathbf{0.853}$ & 0.663 & 0.915 & 0.911 \\
+Dorothea$^\dagger$  & $\mathbf{0.706}$ & 0.655 & 0.775 & 0.615 & $\mathbf{0.794}$ & 0.761 & 0.775 & 0.615 \\
+Arcene$^\dagger$    & $\mathbf{0.805}$ & 0.778 & 0.873 & 0.777 & 0.801 & $\mathbf{0.819}$ & 0.873 & 0.777 \\
+Madelon$^\dagger$   & $\mathbf{0.551}$ & 0.520 & 0.625 & 0.627 & $\mathbf{0.595}$ & 0.568 & 0.625 & 0.627 \\
+\bottomrule
+\end{tabular}
+}
+\end{table}
+
+\subsection{Análisis general}
+\label{subsec:auc_general}
+
+El primer aspecto destacable es que las diferencias en \acrshort{auc} entre métodos son generalmente inferiores a las diferencias en Spearman, lo que indica que un ranking imperfecto puede seguir produciendo subconjuntos de características con capacidad predictiva razonable. Esto es coherente con la naturaleza de la tarea: incluso si el orden exacto de las características difiere, las más relevantes tienden a aparecer en las primeras posiciones de todos los métodos razonables.
+
+En los conjuntos de datos sin saturación, \acrshort{pumi} se mantiene próximo a la cota supervisada en todos los casos. En Waveform-5000, la diferencia entre \acrshort{pumi} y el método supervisado no supera $0.001$ puntos de \acrshort{auc} para ningún valor de $\alpha$, mientras que el \textit{Naive} queda entre $0.004$ y $0.014$ puntos por debajo. En Jasmine los resultados son similares: \acrshort{pumi} replica prácticamente la cota superior con diferencias inferiores a $0.002$ puntos. En Musk~v2, \acrshort{pumi} alcanza incluso un \acrshort{auc} marginalmente superior al del método supervisado a $\alpha=0.1$ ($0.911$ frente a $0.903$), resultado que puede atribuirse a variabilidad estadística en la selección de características.
+
+KDDCup99 y Corral100 presentan valores de \acrshort{auc} prácticamente idénticos para todos los métodos ($\approx 0.996$ y $\approx 0.993$, respectivamente). En estos casos, el problema subyacente es tan fácilmente separable que cualquier subconjunto razonable de características permite construir un clasificador eficaz, haciendo que la elección del método de selección tenga un impacto mínimo en el \acrshort{auc} final. En KDDCup99, a $\alpha=0.3$ el \textit{Naive} supera marginalmente a \acrshort{pumi} en \acrshort{auc} ($0.997$ frente a $0.996$), aunque la diferencia es menor de $0.001$ puntos y queda dentro de la variabilidad estadística.
+
+\subsection{Conjuntos de datos con saturación}
+\label{subsec:auc_saturacion}
+
+En el grupo de conjuntos de datos con saturación, los resultados son más variados e informativos. En Dexter, \acrshort{pumi} obtiene \acrshort{auc} de $0.787$--$0.906$ según $\alpha$, muy por encima del \textit{Naive} ($0.633$--$0.770$), a pesar de que la estimación de $\alpha$ está saturada a 0.999. Este resultado aparentemente contradictorio se explica porque, aunque $\hat{\alpha} \approx 1$, el clasificador \acrshort{lr} en el espacio de 20\,000 características sigue produciendo probabilidades $g(\mathbf{x})$ diferenciadas para las muestras del conjunto no etiquetado, con mayor concentración cerca de cero para los verdaderos negativos. Al utilizarlas como señal continua en el cálculo de \acrshort{im}, se obtiene una selección mejor que la que produce el enfoque binario del \textit{Naive}. Tanto el método supervisado como el de varianza alcanzan \acrshort{auc}$\approx 0.91$ en Dexter, revelando que existe un techo de rendimiento claro para este problema con $K$ fijo.
+
+En Dorothea, \acrshort{pumi} supera sistemáticamente al \textit{Naive} (por ejemplo, $0.706$ vs $0.655$ a $\alpha=0.1$) y, notablemente, también supera al método supervisado a $\alpha \geq 0.3$ ($0.794$--$0.807$ frente a $0.775$). Este resultado, aunque sorprendente, puede atribuirse a variabilidad estadística dada la alta dimensionalidad del conjunto de datos ($p=100\,000$) y el número limitado de muestras ($n=1\,150$).
+
+Madelon constituye el caso más desfavorable: todos los métodos basados en \acrshort{im} obtienen \acrshort{auc} en el rango $0.55$--$0.62$, muy próximos al azar ($0.5$), y la varianza consigue incluso mejores resultados que \acrshort{pumi} ($0.627$ vs $0.551$--$0.621$). Este resultado indica que la señal de clase en Madelon está tan distribuida entre las pocas características relevantes y el ruido que ninguno de los métodos de \acrshort{im} logra identificar correctamente las variables informativas con $K$ fijo.
+
+
+\subsection{Análisis de curvas AUC$(K)$}
+\label{subsec:auc_k}
+
+Con el objetivo de justificar los valores de $K$ utilizados en cada conjunto de datos, se analizó la evolución del \acrshort{auc}-\acrshort{roc} al incrementar progresivamente el número de características seleccionadas a partir del ranking supervisado de referencia. De este modo, las curvas \acrshort{auc}$(K)$ permiten estudiar cuántas variables son necesarias para alcanzar un rendimiento próximo al máximo obtenible en cada problema.
+
+La Figura~\ref{fig:auc_k_panel} muestra ejemplos representativos correspondientes a Jasmine, Dexter, Corral100 y KDDCup99. Los cuatro conjuntos de datos ilustran comportamientos diferentes respecto a la relación entre número de características y rendimiento predictivo.
+
+En Jasmine y Dexter se observa un crecimiento progresivo del \acrshort{auc} al incorporar nuevas características, seguido de una estabilización una vez alcanzado un determinado valor de $K$. Este comportamiento indica que una parte importante de la información discriminativa se concentra en las primeras posiciones del ranking supervisado.
+
+Por el contrario, Corral100 y KDDCup99 alcanzan valores muy elevados de \acrshort{auc} con un número reducido de características y muestran mejoras prácticamente nulas al seguir aumentando $K$. Este resultado es coherente con la elevada separabilidad de ambos problemas, donde un subconjunto pequeño de variables resulta suficiente para obtener un rendimiento cercano al máximo.
+
+Estas curvas se emplearon como criterio auxiliar para seleccionar valores de $K$ adecuados para cada conjunto de datos, buscando un equilibrio entre reducción de dimensionalidad y mantenimiento del rendimiento predictivo.
+
+\begin{figure}[ht]
+\centering
+
+\begin{subfigure}{0.48\textwidth}
+    \centering
+    \includegraphics[width=\textwidth]{resultados/jasmine/auc_k_real.png}
+    \caption{Jasmine}
+\end{subfigure}
+\hfill
+\begin{subfigure}{0.48\textwidth}
+    \centering
+    \includegraphics[width=\textwidth]{resultados/dexter/auc_k_real.png}
+    \caption{Dexter}
+\end{subfigure}
+
+\vspace{6pt}
+
+\begin{subfigure}{0.48\textwidth}
+    \centering
+    \includegraphics[width=\textwidth]{resultados/corral100/auc_k_real.png}
+    \caption{Corral100}
+\end{subfigure}
+\hfill
+\begin{subfigure}{0.48\textwidth}
+    \centering
+    \includegraphics[width=\textwidth]{resultados/kddcup99/auc_k_real.png}
+    \caption{KDDCup99}
+\end{subfigure}
+
+\caption{Curvas \acrshort{auc}$(K)$ obtenidas a partir del ranking supervisado de referencia.}
+\label{fig:auc_k_panel}
+\end{figure}
+
+
+
+% ============================================================
+\section{Relación entre complejidad y rendimiento}
+\label{sec:complejidad_rendimiento}
+% ============================================================
+
+Las diferencias observadas entre conjuntos de datos sugieren que el comportamiento de los métodos de selección de características no depende únicamente de la frecuencia de etiquetado, sino también de las propiedades intrínsecas de cada problema. Para analizar esta cuestión se estudian las medidas de complejidad F1, N1 y C1 descritas en la Sección~\ref{subsec:complejidad}, junto con el ratio de dimensionalidad $p/n$.
+
+La Tabla~\ref{tab:complejidad} recoge los valores calculados sobre las etiquetas reales de cada conjunto de datos.
+
+\begin{table}[ht]
+\centering
+\caption{Medidas de complejidad.}
+\label{tab:complejidad}
+\small
+\begin{tabular}{lrrrr}
+\toprule
+\textbf{Conjunto de datos} & \textbf{F1} & \textbf{N1} & \textbf{C1} & $p/n$ \\
+\midrule
+Waveform-5000 & 0.683 & 0.276 & 0.077 & 0.008 \\
+Corral100     & 0.242 & 0.036 & 0.000 & 0.001 \\
+Jasmine       & 0.719 & 0.360 & 0.000 & 0.048 \\
+Musk v2       & 0.927 & 0.124 & 0.380 & 0.025 \\
+KDDCup99      & 0.368 & 0.004 & 0.284 & 0.000 \\
+\midrule
+Gisette       & 0.551 & 0.072 & 0.000 & 0.714 \\
+Dexter        & 0.774 & 0.332 & 0.000 & 33.33 \\
+Dorothea      & 0.626 & 0.104 & 0.539 & 86.96 \\
+Madelon       & 0.949 & 0.525 & 0.000 & 0.192 \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-% ── 3.1.5 Trazabilidad experimental ──────────────────────────────────────
-\subsection{Trazabilidad experimental con MLflow}
-\label{sec:mlflow}
+\subsection{Dimensionalidad y estimación de \texorpdfstring{$\alpha$}{alpha}}
+\label{subsec:complejidad_alpha}
 
-Todos los experimentos se gestionan mediante MLflow~\cite{zaharia2018mlflow}, plataforma de seguimiento de experimentos diseñada para garantizar la reproducibilidad de flujos de trabajo de aprendizaje automático. Para cada ejecución, MLflow registra automáticamente:
+La relación más clara observada corresponde al ratio de dimensionalidad $p/n$. Los conjuntos de datos en los que se produce saturación del estimador —Gisette, Dexter y Dorothea— son precisamente aquellos con los mayores valores de esta medida. En estos casos, el clasificador utilizado para estimar $g(\mathbf{x})=P(s=1 \mid \mathbf{x})$ dispone de un número muy elevado de variables en comparación con el número de muestras disponibles, lo que facilita la separación entre positivos etiquetados y ejemplos no etiquetados y conduce a estimaciones de $\hat{\alpha}$ próximas a uno.
 
-\begin{itemize}
-  \item \textbf{Parámetros}: dataset, valores de $\alpha$, semillas, $K$, método de estimación de $\hat{\alpha}$ y configuración de la validación cruzada.
-  \item \textbf{Métricas}: \acrshort{auc}-\acrshort{roc}, correlación de Spearman (completa y top-$K$), solapamiento top-$K$ e inestabilidad del ranking, desglosadas por método y valor de $\alpha$.
-  \item \textbf{Artefactos}: rankings de características en formato \acrshort{csv} y figuras comparativas en formato \acrshort{png}.
-\end{itemize}
+Por el contrario, los conjuntos de datos con valores reducidos de $p/n$ presentan estimaciones considerablemente más próximas a la frecuencia de etiquetado real. Waveform-5000, Jasmine, Musk~v2 y KDDCup99 muestran ratios inferiores a 0.05 y son precisamente los conjuntos en los que la evolución de $\hat{\alpha}$ sigue de forma más consistente la evolución de $\alpha$.
 
-Esta infraestructura permite comparar de forma sistemática distintas configuraciones, garantizar que los resultados son reproducibles a partir de los parámetros registrados, y detectar rápidamente inconsistencias entre ejecuciones.
+
+\subsection{Complejidad y calidad del ranking}
+\label{subsec:complejidad_spearman}
+
+Entre las medidas consideradas, N1 es la que parece guardar una relación más consistente con la calidad de los rankings obtenidos. Esta medida cuantifica el grado de solapamiento entre clases, de modo que valores elevados indican problemas donde la frontera de decisión es más compleja y la separación entre clases resulta menos evidente.
+
+Los conjuntos de datos más sencillos desde este punto de vista son KDDCup99 ($N1=0.004$) y Corral100 ($N1=0.036$). Ambos presentan problemas altamente separables y muestran diferencias reducidas entre métodos en términos de clasificación. En estos escenarios, el enfoque \textit{Naive} ya dispone de una señal suficientemente informativa para recuperar gran parte de las características relevantes, reduciendo el margen de mejora de \acrshort{pumi}.
+
+Waveform-5000 ($N1=0.276$) y Jasmine ($N1=0.360$) presentan niveles de solapamiento superiores y son precisamente los conjuntos donde \acrshort{pumi} muestra algunas de las ventajas más claras frente al enfoque \textit{Naive} en términos de correlación de Spearman. Esto sugiere que la corrección probabilística resulta especialmente útil cuando la presencia de positivos ocultos dificulta la identificación de las características más relevantes.
+
+Madelon constituye el caso más extremo de la colección. Presenta el valor de N1 más elevado ($N1=0.525$), indicando un fuerte solapamiento entre clases. Este resultado es coherente con el comportamiento observado en las secciones anteriores, donde tanto \acrshort{pumi} como el enfoque \textit{Naive} obtienen correlaciones de Spearman relativamente bajas. El elevado solapamiento dificulta la identificación de las características verdaderamente informativas, reduciendo la calidad de los rankings generados independientemente del método utilizado.
+
+Los conjuntos de datos con saturación no siguen un patrón tan claro. Aunque Gisette presenta un valor de N1 relativamente bajo ($N1=0.072$), Dexter ($N1=0.332$) y Dorothea ($N1=0.104$) muestran comportamientos diferentes entre sí. Estos resultados indican que, en problemas de muy alta dimensionalidad, la relación entre complejidad y calidad del ranking también depende de otros factores asociados a la estructura de las características y al efecto de la saturación del estimador.
+
+La Figura~\ref{fig:n1_scatter} muestra la relación entre N1 y la correlación de Spearman obtenida por los distintos métodos para $\alpha=0.1$ y $\alpha=0.3$. Aunque no se observa una relación estrictamente lineal, los conjuntos de datos con valores más elevados de N1 tienden a presentar correlaciones de Spearman más reducidas. Por el contrario, los problemas con menor solapamiento entre clases se concentran en la zona de Spearman elevado, especialmente para el método supervisado de referencia.
+
+\begin{figure}[ht]
+\centering
+
+\begin{subfigure}{0.48\textwidth}
+    \centering
+    \includegraphics[width=\textwidth]{results/scatter_n1_alpha0_1.png}
+    \caption{$\alpha=0.1$}
+\end{subfigure}
+\hfill
+\begin{subfigure}{0.48\textwidth}
+    \centering
+    \includegraphics[width=\textwidth]{results/scatter_n1_alpha0_3.png}
+    \caption{$\alpha=0.3$}
+\end{subfigure}
+
+\caption{Relación entre N1 y la correlación de Spearman obtenida por cada método.}
+\label{fig:n1_scatter}
+\end{figure}
+
+
+\subsection{Interpretación de F1 y C1}
+\label{subsec:complejidad_f1_c1}
+
+Las medidas F1 y C1 muestran una relación menos evidente con los resultados obtenidos que el ratio $p/n$ o la medida N1.
+
+La Figura~\ref{fig:f1_scatter} representa la relación entre F1 y la correlación de Spearman. No se aprecia una tendencia clara que permita asociar valores altos de F1 con rankings de mayor calidad. Por ejemplo, Madelon presenta el valor más elevado de F1 de toda la colección ($F1=0.949$), pero obtiene resultados modestos en términos de Spearman. Por el contrario, conjuntos de datos como KDDCup99 o Corral100 alcanzan correlaciones más elevadas a pesar de presentar valores de F1 considerablemente menores.
+
+Este comportamiento indica que la existencia de características individualmente discriminativas no garantiza que el problema resulte sencillo para los métodos de selección de características. La recuperación de las variables relevantes depende también de otros factores, como el solapamiento entre clases, la presencia de ruido o la estructura global del espacio de características. Por ello, F1 parece aportar información parcial sobre el problema, pero no resulta suficiente para explicar por sí sola las diferencias observadas entre conjuntos de datos.
+
+
+\begin{figure}[ht]
+\centering
+
+\begin{subfigure}{0.48\textwidth}
+    \centering
+    \includegraphics[width=\textwidth]{results/scatter_f1_alpha0_1.png}
+    \caption{$\alpha=0.1$}
+\end{subfigure}
+\hfill
+\begin{subfigure}{0.48\textwidth}
+    \centering
+    \includegraphics[width=\textwidth]{results/scatter_f1_alpha0_3.png}
+    \caption{$\alpha=0.3$}
+\end{subfigure}
+
+\caption{Relación entre F1 y la correlación de Spearman obtenida por cada método.}
+\label{fig:f1_scatter}
+\end{figure}
+
+Por su parte, la medida C1 refleja principalmente el grado de desbalanceo entre clases. Musk~v2 ($C1=0.380$) y Dorothea ($C1=0.539$) son los conjuntos más desbalanceados de la colección, mientras que Jasmine, Gisette, Dexter, Corral100 y Madelon presentan clases prácticamente equilibradas. Sin embargo, no se observa una relación clara entre el valor de C1 y el comportamiento relativo de \acrshort{pumi} frente al enfoque \textit{Naive}. Esto sugiere que el desbalanceo de clases no constituye un factor determinante para explicar las diferencias observadas en este trabajo.
+
+
+La Figura~\ref{fig:c1_scatter} permite visualizar la relación entre C1 y la correlación de Spearman. Los puntos aparecen ampliamente dispersos para valores similares de C1 y no muestran una tendencia clara. Este resultado refuerza la idea de que el grado de desbalanceo de clases no constituye un factor determinante para explicar las diferencias observadas entre \acrshort{pumi} y el enfoque \textit{Naive}.
+
+\begin{figure}[ht]
+\centering
+
+\begin{subfigure}{0.48\textwidth}
+    \centering
+    \includegraphics[width=\textwidth]{results/scatter_c1_alpha0_1.png}
+    \caption{$\alpha=0.1$}
+\end{subfigure}
+\hfill
+\begin{subfigure}{0.48\textwidth}
+    \centering
+    \includegraphics[width=\textwidth]{results/scatter_c1_alpha0_3.png}
+    \caption{$\alpha=0.3$}
+\end{subfigure}
+
+\caption{Relación entre C1 y la correlación de Spearman obtenida por cada método.}
+\label{fig:c1_scatter}
+\end{figure}
+
+
+En conjunto, los resultados indican que el ratio $p/n$ es el principal indicador asociado a la aparición de saturación en la estimación de $\alpha$, mientras que N1 parece ser la medida más informativa para interpretar cuándo la corrección probabilística de \acrshort{pumi} puede aportar ventajas frente al enfoque \textit{Naive}. Por el contrario, F1 y C1 muestran una relación menos directa con la calidad de los rankings y el rendimiento de clasificación obtenidos.
 
 % ============================================================
+\chapter{Conclusiones}
+\label{chap:conclusiones}
+% ============================================================
 
-\bibliography{referencias}
+\lettrine{E}{ste} trabajo ha abordado el problema de la selección de características en escenarios de aprendizaje Positive-Unlabeled, proponiendo \acrshort{pumi}, un método basado en información mutua que incorpora la corrección probabilística de Elkan y Noto~\cite{elkan2008learning} para reducir el sesgo introducido por los positivos ocultos. A continuación se recogen las principales conclusiones obtenidas, articuladas en torno a los objetivos planteados en el Capítulo~\ref{chap:introducion}.
 
+% ============================================================
+\section{Conclusiones principales}
+\label{sec:conclusiones_principales}
+% ============================================================
 
-\end{document}
+\paragraph{Revisión del estado del arte.}
+El estudio bibliográfico realizado muestra que, si bien el aprendizaje \acrshort{pu} ha recibido considerable atención en los últimos años, la mayor parte de la literatura se ha centrado en el desarrollo de clasificadores y en la estimación de $\alpha$, dedicándose un esfuerzo notablemente menor a la selección de características adaptada a este escenario~\cite{bekker2020learning}. El enfoque \textit{Naive}, que trata todos los ejemplos no etiquetados como negativos, constituye la práctica habitual al aplicar métodos clásicos de selección de características en entornos \acrshort{pu}, y sus limitaciones se hacen especialmente visibles cuando la frecuencia de etiquetado $\alpha$ es baja.
+
+\paragraph{Diseño e implementación de \acrshort{pumi}.}
+El método propuesto integra tres etapas: entrenamiento de un clasificador \acrshort{lr} para obtener probabilidades $g(\mathbf{x}) = P(S=1 \mid \mathbf{x})$, estimación de $\alpha$ mediante la media de esas probabilidades sobre los positivos etiquetados, y cálculo de la información mutua entre cada característica y las probabilidades corregidas $\hat{P}(Y=1 \mid \mathbf{x}) = g(\mathbf{x}) / \hat{\alpha}$. La implementación se realizó en Python con scikit-learn y MLflow para la gestión de experimentos, siguiendo un protocolo de validación cruzada estratificada que garantiza la ausencia de fugas de información entre el proceso de selección y la evaluación.
+
+\paragraph{Eficacia de la corrección probabilística.}
+Los resultados experimentales confirman que la corrección probabilística mejora la calidad de los rankings de características frente al enfoque \textit{Naive} en la mayoría de los conjuntos de datos evaluados. La ventaja de \acrshort{pumi} es más pronunciada en escenarios con valores bajos de $\alpha$, precisamente donde el sesgo del \textit{Naive} es mayor. En Jasmine con $\alpha=0.1$, \acrshort{pumi} alcanza $\rho=0.894$ frente a $\rho=0.291$ del \textit{Naive}; en Waveform-5000, $\rho=0.885$ frente a $\rho=0.723$. A medida que $\alpha$ aumenta, los rankings de ambos métodos convergen, lo que es coherente con la teoría: cuando la proporción de positivos ocultos disminuye, el sesgo del \textit{Naive} se reduce y la ventaja de la corrección disminuye.
+
+Sin embargo, en problemas con separabilidad extrema (Corral100, KDDCup99) la señal de clase ya es tan clara que el \textit{Naive} recupera las características relevantes con alta fidelidad, y la corrección probabilística no aporta una mejora apreciable. Este resultado sugiere que \acrshort{pumi} es especialmente útil en problemas de dificultad media, donde el solapamiento entre clases hace que el sesgo del etiquetado parcial impacte de forma más directa sobre el ranking de características.
+
+\paragraph{Calidad de los rankings y aproximación al escenario supervisado.}
+\acrshort{pumi} aproxima de forma consistente el ranking supervisado en los conjuntos de datos sin saturación. La correlación de Spearman de \acrshort{pumi} supera a la del \textit{Naive} en Waveform-5000, Jasmine y Musk~v2 para todos los valores de $\alpha$ evaluados. En los conjuntos de datos con alto ratio $p/n$, la estimación de $\hat{\alpha}$ satura hacia uno, invalidando la interpretación probabilística de la corrección; no obstante, el clasificador \acrshort{lr} sigue produciendo puntuaciones continuas diferenciadas que permiten a \acrshort{pumi} mantener una ventaja en \acrshort{auc} sobre el \textit{Naive} también en Dexter y Dorothea.
+
+\paragraph{Impacto en la clasificación.}
+Las diferencias en \acrshort{auc} entre métodos son sistemáticamente menores que las diferencias en Spearman. Esto refleja la robustez del clasificador final ante rankings imperfectos: un ordenamiento ligeramente erróneo sigue permitiendo construir modelos con capacidad predictiva razonable si las características más relevantes aparecen en posiciones próximas a las correctas. Aun así, \acrshort{pumi} se mantiene próximo a la cota supervisada en todos los conjuntos sin saturación, con diferencias de \acrshort{auc} inferiores a $0.002$ puntos en Waveform-5000 y Jasmine para todos los valores de $\alpha$ evaluados. La ventaja en clasificación es más visible cuando se analiza la evolución de \acrshort{auc}$(K)$, donde \acrshort{pumi} alcanza valores altos con un número menor de características que el \textit{Naive}.
+
+\paragraph{Robustez y aplicabilidad.}
+El estudio de complejidad confirma que el ratio $p/n$ es el predictor más directo de la viabilidad del método: cuando el número de características es muy elevado respecto al número de muestras, el clasificador satura y la estimación de $\alpha$ pierde validez. La medida N1 (solapamiento entre clases) predice la dificultad global de la selección: conjuntos con N1 bajo son fáciles para todos los métodos y la ventaja de \acrshort{pumi} se reduce, mientras que conjuntos con N1 moderado-alto dificultan la recuperación de variables relevantes en ausencia de corrección. Estos dos factores permiten anticipar el comportamiento esperado de \acrshort{pumi} ante nuevos conjuntos de datos y orientar su uso de forma informada.
+
+% ============================================================
+\section{Limitaciones}
+\label{sec:limitaciones}
+% ============================================================
+
+El método propuesto presenta varias limitaciones que deben tenerse en cuenta al valorar su aplicabilidad.
+
+En primer lugar, \acrshort{pumi} asume la hipótesis \acrshort{scar}, que establece que todos los positivos tienen la misma probabilidad de ser etiquetados con independencia de sus características~\cite{elkan2008learning}. Esta hipótesis puede no cumplirse en dominios donde el proceso de etiquetado introduce sesgos sistemáticos, como ocurre cuando solo se etiquetan los positivos más evidentes o los identificados mediante un protocolo específico.
+
+En segundo lugar, la estimación de $\alpha$ depende de la calidad del clasificador \acrshort{lr}, que puede saturar en entornos con ratio $p/n$ elevado. En estos casos, $\hat{\alpha}$ converge hacia uno independientemente del valor real, invalidando la corrección probabilística aunque el resto del pipeline continúe produciendo resultados razonables. La exploración de estimadores alternativos más robustos ante la saturación es una dirección de mejora directa (véase el Apéndice~\ref{chap:apendice_alpha_robusto}).
+
+En tercer lugar, la información mutua se estima mediante el estimador \acrshort{knn} de Kraskov et~al.~\cite{kraskov2004estimating}, cuya variabilidad estadística puede degradar la fiabilidad del ranking en datasets con pocas muestras disponibles por partición.
+
+% ============================================================
+\section{Trabajo futuro}
+\label{sec:trabajo_futuro}
+% ============================================================
+
+Los resultados obtenidos abren varias líneas de investigación que podrían ampliar el alcance y la robustez del método.
+
+Una primera dirección es explorar clasificadores alternativos a la \acrshort{lr} para la estimación de $g(\mathbf{x})$, como modelos con calibración isotónica o ensambles, que podrían ofrecer probabilidades mejor calibradas en entornos de alta dimensionalidad y reducir el efecto de saturación.
+
+Una segunda línea de interés es la extensión del método a escenarios más allá de la hipótesis \acrshort{scar}, donde el mecanismo de etiquetado depende de las características del ejemplo. En estos casos, la corrección de Elkan y Noto no es directamente aplicable y serían necesarios modelos del proceso de selección de positivos más generales~\cite{bekker2020learning}.
+
+Otra dirección natural es la combinación de \acrshort{pumi} con criterios que explotan la redundancia entre variables, como \acrshort{mrmr}~\cite{peng2005feature}, para obtener subconjuntos más compactos que los generados por un ranking basado únicamente en relevancia individual.
+
+Finalmente, sería de interés evaluar el método en dominios de aplicación real con etiquetado parcial genuino ---como descubrimiento de fármacos, detección de enfermedades raras o identificación de genes asociados a fenotipos--- donde las etiquetas disponibles provienen de validaciones experimentales y el valor de $\alpha$ es desconocido y potencialmente bajo.
+
+% ============================================================
+\appendix
+\chapter[Estimación robusta de \texorpdfstring{$\alpha$}{alpha}]{Caso de estudio: estimación robusta de \texorpdfstring{$\alpha$}{alpha}}
+\label{chap:apendice_alpha_robusto}
+% ============================================================
+
+\lettrine{D}{urante} el desarrollo de este trabajo se exploró una variante del estimador de $\alpha$ descrito en la Sección~\ref{subsec:estimacion_alpha}, orientada a reducir el sesgo de subestimación que afecta al estimador estándar basado en la media. Este apéndice documenta la motivación, la formulación del método y los resultados obtenidos, que no lograron mejorar los producidos por el estimador original.
+
+% ============================================================
+\section{Motivación}
+\label{sec:apendice_motivacion}
+% ============================================================
+
+El estimador estándar de $\alpha$ calcula la media de los scores $g(\mathbf{x}) = P(S=1 \mid \mathbf{x})$ sobre el conjunto de positivos etiquetados $\mathcal{P}$:
+\begin{equation}
+  \hat{\alpha}_{\text{media}} = \frac{1}{|\mathcal{P}|} \sum_{\mathbf{x}_i \in \mathcal{P}} g(\mathbf{x}_i).
+  \label{eq:alpha_media}
+\end{equation}
+Bajo la hipótesis \acrshort{scar}, esta cantidad converge al valor verdadero $\alpha = P(S=1 \mid Y=1)$~\cite{elkan2008learning}. Sin embargo, en la práctica el clasificador $g$ puede asignar probabilidades bajas a algunos positivos etiquetados, especialmente cuando el conjunto no etiquetado $\mathcal{U}$ contiene una proporción elevada de positivos ocultos y el modelo encuentra dificultades para separarlos de los negativos. En ese caso, $\hat{\alpha}_{\text{media}}$ suele subestimar el valor verdadero.
+
+La intuición detrás del estimador robusto es que los positivos etiquetados con scores más altos son los que el modelo clasifica con mayor confianza como pertenecientes a $\mathcal{P}$, y por tanto constituyen la estimación más fiable de $P(S=1 \mid Y=1)$. Restringir el promedio a este subconjunto de alta confianza debería producir estimaciones menos sesgadas hacia abajo.
+
+% ============================================================
+\section{Método}
+\label{sec:apendice_metodo}
+% ============================================================
+
+El estimador robusto introduce un hiperparámetro $q \in (0, 100]$ que controla el percentil superior de los positivos etiquetados utilizado para el cálculo. Dado un umbral $\tau_q = \text{percentil}_{100-q}(\{g(\mathbf{x}_i)\}_{\mathbf{x}_i \in \mathcal{P}})$, la estimación se calcula como:
+\begin{equation}
+  \hat{\alpha}_{\text{rob}}(q) = \frac{1}{|\mathcal{P}_q|} \sum_{\mathbf{x}_i \in \mathcal{P}_q} g(\mathbf{x}_i),
+  \label{eq:alpha_robusto}
+\end{equation}
+donde $\mathcal{P}_q = \{\mathbf{x}_i \in \mathcal{P} : g(\mathbf{x}_i) \geq \tau_q\}$ es el subconjunto de positivos etiquetados con score superior al umbral. Cuando $q = 100$, el estimador coincide con $\hat{\alpha}_{\text{media}}$; cuando $q \to 0$, converge al máximo de los scores en $\mathcal{P}$.
+
+Para cada valor de $q$ se obtiene una estimación $\hat{\alpha}_{\text{rob}}(q)$ que se utiliza directamente en la corrección probabilística de Elkan y Noto, según $\hat{P}(Y=1 \mid \mathbf{x}) = g(\mathbf{x}) / \hat{\alpha}_{\text{rob}}(q)$. El resto del proceso de selección de características permanece sin cambios respecto al método \acrshort{pumi} estándar.
+
+% ============================================================
+\section{Experimento sobre Waveform-5000}
+\label{sec:apendice_experimento}
+% ============================================================
+
+El experimento se realizó sobre el conjunto de datos Waveform-5000 (5\,000 muestras, 40 características, clase~0 frente al resto), fijando $\alpha_{\text{real}} = 0.2$ y evaluando $q \in \{5, 20, 30, 50, 100\}$. Para cada valor de $q$ se midieron las mismas métricas empleadas en el estudio principal: correlación de Spearman sobre el ranking completo y sobre el top-10, y \acrshort{auc} de clasificación con las top-10 características seleccionadas. Los resultados se promediaron sobre tres semillas y tres particiones.
+
+La Figura~\ref{fig:apendice_sweep_q} muestra los resultados completos del experimento. El panel superior izquierdo confirma que $\hat{\alpha}_{\text{rob}}(q)$ varía de forma monótona con $q$: para $q=5$, el estimador produce $\hat{\alpha} \approx 0.40$, sobreestimando considerablemente el valor real ($\alpha=0.2$); para $q=100$ (equivalente a la media), la estimación desciende hasta $\hat{\alpha} \approx 0.16$, subestimándolo. El cruce con el valor real se produce en torno a $q \approx 20$--$30$, sugiriendo que existe un percentil que produce una estimación insesgada para este conjunto de datos y este valor de $\alpha$.
+
+Sin embargo, los paneles restantes revelan que la calidad de la selección de características es esencialmente insensible al valor de $q$. Tanto el \acrshort{auc} de clasificación (panel superior derecho) como las correlaciones de Spearman (paneles inferiores) permanecen prácticamente constantes en todo el rango de $q$ evaluado, con variaciones dentro del intervalo de confianza. Este resultado indica que, a pesar de que el estimador robusto produce valores de $\hat{\alpha}$ más cercanos al valor real para determinados $q$, la mejora en la estimación de $\alpha$ no se traduce en una mejora apreciable en la calidad del ranking de características ni en el rendimiento del clasificador final.
+
+\begin{figure}[ht]
+\centering
+\includegraphics[width=\textwidth]{resultados/waveform/robust/top_q_percent_sweep.png}
+\caption{Resultados del experimento de estimación robusta de $\alpha$ sobre Waveform-5000 ($\alpha_{\text{real}}=0.2$). \textbf{Superior izquierda:} $\hat{\alpha}_{\text{rob}}(q)$ en función del percentil $q$; la línea discontinua roja indica el valor verdadero. \textbf{Superior derecha:} \acrshort{auc} de clasificación en función de $q$. \textbf{Inferior izquierda:} Correlación de Spearman sobre el ranking completo. \textbf{Inferior derecha:} Correlación de Spearman sobre el top-10. En todos los paneles se incluyen los métodos \acrshort{pumi} con estimador robusto (azul), \textit{Naive} (naranja), Varianza (rojo) y el método supervisado como referencia (verde).}
+\label{fig:apendice_sweep_q}
+\end{figure}
+
+Para contextualizar, la Figura~\ref{fig:apendice_waveform_comparativa} muestra los resultados del método \acrshort{pumi} estándar (con estimador de la media) y del \textit{Naive} en función de $\alpha$ real, tal y como aparecen en el capítulo de resultados. En Waveform-5000, \acrshort{pumi} supera consistentemente al \textit{Naive} en Spearman y mantiene un \acrshort{auc} próximo a la cota supervisada. El estimador robusto, con el percentil $q$ que minimiza el error en $\hat{\alpha}$, reproduce exactamente este nivel de rendimiento sin superarlo.
+
+\begin{figure}[ht]
+\centering
+\includegraphics[width=0.48\textwidth]{resultados/waveform/mean/spearman_vs_alpha.png}
+\hfill
+\includegraphics[width=0.48\textwidth]{resultados/waveform/mean/auc_vs_alpha.png}
+\caption{Resultados de referencia de Waveform-5000 con el estimador estándar (media). \textbf{Izquierda:} Correlación de Spearman top-10 en función de $\alpha$. \textbf{Derecha:} \acrshort{auc} de clasificación en función de $\alpha$. Incluye \acrshort{pumi} (azul), \textit{Naive} (naranja), método supervisado (verde) y Varianza (rojo).}
+\label{fig:apendice_waveform_comparativa}
+\end{figure}
+
+% ============================================================
+\section{Discusión}
+\label{sec:apendice_discusion}
+% ============================================================
+
+Los resultados de este experimento permiten extraer dos conclusiones relevantes.
+
+En primer lugar, el estimador robusto modifica sistemáticamente $\hat{\alpha}$ en la dirección esperada: percentiles bajos de $q$ aumentan la estimación, compensando la subestimación del estimador de la media. Sin embargo, esta corrección no resulta beneficiosa en términos de selección de características, lo que sugiere que la sensibilidad del método \acrshort{pumi} a la precisión de $\hat{\alpha}$ es baja en el rango de valores explorado. La razón puede encontrarse en que la corrección probabilística $g(\mathbf{x})/\hat{\alpha}$ escala de forma uniforme todas las estimaciones de $P(Y=1 \mid \mathbf{x})$ por un factor constante; dado que la información mutua es invariante a transformaciones monótonas del target~\cite{cover2006elements}, cambiar $\hat{\alpha}$ por un factor multiplicativo no altera el ranking de características resultante.
+
+En segundo lugar, el método de estimación de $\alpha$ supone un hiperparámetro adicional ($q$) cuyo valor óptimo depende del conjunto de datos y del valor real de $\alpha$, ambos desconocidos en la práctica. Dado que la variación de $q$ no produce mejoras observables y sí introduce una fuente adicional de incertidumbre, se concluye que el estimador estándar basado en la media constituye la opción más adecuada para el método \acrshort{pumi}, y así se ha adoptado en todos los experimentos presentados en la memoria.
