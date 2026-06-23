@@ -104,7 +104,7 @@ def _update_csv(row: dict) -> None:
     else:
         df = pd.DataFrame([row])
     df.to_csv(RESULTS_CSV, index=False, float_format="%.6f")
-    print(f"  CSV actualizado → {RESULTS_CSV}")
+    print(f"  CSV actualizado -> {RESULTS_CSV}")
 
 
 # ── Entry point ────────────────────────────────────────────────────────────────

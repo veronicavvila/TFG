@@ -1,4 +1,4 @@
-# PU Learning con Selección de Features
+# Selección de Características Basada en Información Mutua para Datos Positive-Unlabeled
 
 TFG que implementa un framework de **Positive-Unlabeled (PU) Learning** para selección de features basada en Información Mutua con estimación robusta de alpha.
 

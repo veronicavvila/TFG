@@ -71,9 +71,8 @@ def main():
             fontsize=8,
         )
     ax.set_xscale("log")
-    ax.set_xlabel("k (número de features seleccionadas)", fontsize=11)
+    ax.set_xlabel("K (número de características seleccionadas)", fontsize=11)
     ax.set_ylabel("AUC", fontsize=11)
-    ax.set_title(f"Curva AUC(k) — ranking supervisado real\n{dataset_name}", fontsize=12)
     ax.set_xticks(df["k"])
     ax.get_xaxis().set_major_formatter(plt.ScalarFormatter())
     ax.grid(True, which="both", linestyle="--", alpha=0.4)
